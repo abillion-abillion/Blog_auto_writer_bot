@@ -2,9 +2,8 @@ name: 블로그 초안 자동 생성
 
 on:
   schedule:
-    # 매일 오전 7시 (KST = UTC+9, 즉 UTC 22:00 전날)
     - cron: "0 22 * * *"
-  workflow_dispatch:  # 수동 실행 버튼
+  workflow_dispatch:
 
 jobs:
   generate-blog-draft:
@@ -25,8 +24,8 @@ jobs:
 
       - name: 블로그 초안 생성 및 텔레그램 전송
         env:
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  TELEGRAM_BOT_TOKEN: ${{ secrets.BLOG_BOT_TOKEN }}
-  TELEGRAM_CHAT_ID: ${{ secrets.BLOG_BOT_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.BLOG_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.BLOG_BOT_CHAT_ID }}
         run: |
           python blog_draft.py
