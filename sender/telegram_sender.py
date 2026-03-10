@@ -48,25 +48,41 @@ def send_document(content: str, filename: str) -> bool:
     return resp.status_code == 200
 
 
-def send_blog_draft(draft_text: str, one_line_summary: str = "") -> None:
-    """블로그 초안 텔레그램 전송"""
-    today = datetime.now().strftime("%Y.%m.%d")
-    filename = f"blog_draft_{today}.txt"
+def send_long_text(text: str) -> None:
+    """4096자 초과 텍스트를 자동 분할해서 순서대로 전송"""
+    LIMIT = 3800  # 여유 있게 3800자 기준
+    chunks = []
+    while len(text) > LIMIT:
+        # 문단 경계에서 자르기
+        split_at = text.rfind("\n\n", 0, LIMIT)
+        if split_at == -1:
+            split_at = LIMIT
+        chunks.append(text[:split_at].strip())
+        text = text[split_at:].strip()
+    if text:
+        chunks.append(text)
 
-    # 헤더 메시지 (짧게)
+    total = len(chunks)
+    for i, chunk in enumerate(chunks, 1):
+        prefix = f"📄 <b>({i}/{total})</b>\n\n" if total > 1 else ""
+        send_message(f"{prefix}{chunk}")
+        import time; time.sleep(0.5)  # 연속 전송 딜레이
+
+
+def send_blog_draft(draft_text: str, one_line_summary: str = "") -> None:
+    """블로그 초안 텔레그램 전송 (자동 분할)"""
+    today = datetime.now().strftime("%Y.%m.%d")
+
+    # 헤더 메시지
     header = (
         f"📝 <b>블로그 초안 생성 완료</b> ({today})\n\n"
         f"💡 {one_line_summary}\n\n"
-        f"아래 파일을 열어 검토 후 네이버 블로그에 복붙하세요."
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
-
     send_message(header)
 
-    # 초안 본문은 파일로
-    if len(draft_text) > 4000:
-        send_document(draft_text, filename)
-    else:
-        send_message(f"<pre>{draft_text[:4000]}</pre>")
+    # 본문 분할 전송
+    send_long_text(draft_text)
 
     print(f"  ✓ 텔레그램 전송 완료")
 
