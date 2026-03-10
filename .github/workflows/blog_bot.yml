@@ -25,8 +25,8 @@ jobs:
 
       - name: 블로그 초안 생성 및 텔레그램 전송
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.BLOG_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.BLOG_BOT_CHAT_ID }}
         run: |
           python blog_draft.py
