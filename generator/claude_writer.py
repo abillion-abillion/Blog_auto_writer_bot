@@ -53,9 +53,20 @@ SYSTEM_PROMPT = """
 
 1. 첫 문장: 질문으로 시작 (호기심 유발)
 2. 오늘의 핵심 한 줄
-3. 왜 중요한가 (배경, 2~3단락)
-4. 내 자산에 어떤 영향? (구체적 숫자 포함)
-5. 오늘의 실천 포인트 1~2개 (막연한 조언 금지, 구체적 행동)
+3. 왜 중요한가 (배경, 3~5단락, 역사적 사례 포함)
+4. 내 자산에 어떤 영향? (구체적 숫자 포함, 예금/주식/부동산 등 자산 유형별 설명)
+5. 전문가 시각 (자산관리사로서의 판단과 근거)
+6. 오늘의 실천 포인트 1~2개 (막연한 조언 금지, 구체적 행동)
+7. 마무리 CTA (아래 문구 그대로 삽입)
+
+## CTA (글 마지막에 반드시 이 형식 그대로)
+
+💬 오늘 내용이 내 상황에 어떻게 적용되는지 궁금하신가요?
+
+5년간 100명 이상의 자산을 관리해온 경험을 바탕으로,
+여러분의 상황에 맞는 방향을 함께 찾아드립니다.
+
+👉 무료 상담 신청: https://jwfinancial.co.kr/
 
 ## 참고할 실제 글 샘플 (이 말투를 따라주세요)
 
@@ -98,24 +109,29 @@ SYSTEM_PROMPT = """
 {
   "title": "블로그 제목 (클릭 유도, 30자 이내)",
   "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 10일 경제 브리핑)",
-  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수)",
+  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수, CTA 포함, 2000자 이상)",
   "tags": ["태그1", "태그2", ...],
-  "one_line_summary": "핵심 한 줄 요약"
+  "one_line_summary": "핵심 한 줄 요약",
+  "image_keywords": ["영어 키워드1", "영어 키워드2", "영어 키워드3", "영어 키워드4", "영어 키워드5"]
 }
 """
 
-USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건을 바탕으로 블로그 포스트 초안을 작성해주세요.
+USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건을 바탕으로 심층 분석 블로그 포스트를 작성해주세요.
 
 === 오늘의 주요 뉴스 ===
 {news_text}
 
 === 작성 가이드 ===
-- 분량: 800~1200자
+- 분량: 2000~3000자 (심층 분석글)
+- 단순 뉴스 요약 금지. 배경 → 원인 → 영향 → 전망까지 흐름이 이어져야 함
 - 구성:
-  1. 오늘의 핵심 (뉴스 중 가장 중요한 것 1개 집중)
-  2. 왜 중요한가 (배경 설명)
-  3. 내 자산에 어떤 영향? (구체적 예시)
-  4. 오늘의 실천 포인트
+  1. 오늘의 핵심 (가장 중요한 이슈 1개 선택)
+  2. 왜 지금 이 이슈인가? (시장 배경, 역사적 맥락)
+  3. 숫자로 보는 현황 (구체적 데이터 포함)
+  4. 내 자산 유형별 영향 (예금/주식/부동산/보험 등 분류해서)
+  5. 전문가(자산관리사) 시각과 판단 근거
+  6. 실천 포인트 (구체적 행동)
+  7. CTA
 - 작성일: {today}
 """
 
@@ -146,7 +162,7 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
     print("📝 Claude API 초안 생성 중...")
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",  # 비용 최소화
-        max_tokens=2000,
+        max_tokens=4000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
@@ -173,10 +189,28 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
     return draft
 
 
+def get_unsplash_images(keywords: list, count: int = 5) -> list:
+    """Unsplash에서 키워드별 이미지 URL 수집 (API 키 불필요)"""
+    images = []
+    for kw in keywords[:count]:
+        # Unsplash source API: 키워드로 무작위 이미지 직접 URL 생성
+        url = f"https://source.unsplash.com/800x500/?{kw.replace(' ', ',')}"
+        images.append({"keyword": kw, "url": url})
+    return images
+
+
 def format_for_naver_blog(draft: Dict) -> str:
     """네이버 블로그 복붙용 텍스트 포맷"""
     today = datetime.now().strftime("%Y.%m.%d")
     tags_str = " ".join([f"#{t}" for t in draft.get("tags", [])])
+
+    # 이미지 섹션
+    image_keywords = draft.get("image_keywords", ["economy", "finance", "investment", "money", "market"])
+    images = get_unsplash_images(image_keywords, count=5)
+    image_section = "\n".join([
+        f"  📸 [{img['keyword']}] {img['url']}"
+        for img in images
+    ])
 
     output = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -188,6 +222,10 @@ def format_for_naver_blog(draft: Dict) -> str:
 
 【부제목】
 {draft.get('subtitle', '')}
+
+【추천 이미지 5장】
+(각 URL을 브라우저에서 열면 이미지 저장 가능)
+{image_section}
 
 【본문】
 {draft.get('body', '')}
