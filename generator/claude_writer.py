@@ -199,6 +199,25 @@ def get_unsplash_images(keywords: list, count: int = 5) -> list:
     return images
 
 
+def clean_body(text: str) -> str:
+    """본문 텍스트 정리: \n 이스케이프 → 실제 줄바꿈, 마크다운 헤더 → 네이버 스타일"""
+    # JSON 이스케이프된 줄바꿈 처리
+    text = text.replace("\\n", "\n").replace("\\t", "\t")
+    # 마크다운 굵게(**text**) → 그대로 유지 (네이버 블로그 에디터에서 수동 적용)
+    # ## 헤더 → 줄바꿈 + 텍스트 (네이버는 마크다운 미지원)
+    lines = []
+    for line in text.split("\n"):
+        if line.startswith("### "):
+            lines.append(f"\n▶ {line[4:]}")
+        elif line.startswith("## "):
+            lines.append(f"\n━━ {line[3:]} ━━")
+        elif line.startswith("# "):
+            lines.append(f"\n◆ {line[2:]}")
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def format_for_naver_blog(draft: Dict) -> str:
     """네이버 블로그 복붙용 텍스트 포맷"""
     today = datetime.now().strftime("%Y.%m.%d")
@@ -211,6 +230,9 @@ def format_for_naver_blog(draft: Dict) -> str:
         f"  📸 [{img['keyword']}] {img['url']}"
         for img in images
     ])
+
+    # 본문 정리 (줄바꿈 + 헤더 변환)
+    body_clean = clean_body(draft.get('body', ''))
 
     output = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -227,8 +249,8 @@ def format_for_naver_blog(draft: Dict) -> str:
 (각 URL을 브라우저에서 열면 이미지 저장 가능)
 {image_section}
 
-【본문】
-{draft.get('body', '')}
+【본문 - 아래부터 복붙】
+{body_clean}
 
 【태그】
 {tags_str}
