@@ -232,9 +232,12 @@ def clean_body(text: str) -> str:
     본문 텍스트 정리
     1) JSON 이스케이프 → 실제 줄바꿈
     2) 마크다운 헤더(#, ##, ###) → 일반 텍스트 구분자
-    3) **굵게** → 기호 제거 (순수 텍스트만 남김)
-    4) _이탤릭_ → 기호 제거
+    3) * 문자 완전 제거 (패턴 무관하게 전부 삭제)
+    4) __ _이탤릭_ → 기호 제거
+    5) 인라인 코드 백틱 제거
     """
+    import re
+
     # JSON 이스케이프 처리
     text = text.replace("\\n", "\n").replace("\\t", "\t")
 
@@ -248,11 +251,9 @@ def clean_body(text: str) -> str:
         elif line.startswith("# "):
             line = f"◆ {line[2:]}"
 
-        # **굵게** 제거 → 텍스트만 남김
-        import re
-        line = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
-        # *이탤릭* 제거
-        line = re.sub(r'\*(.+?)\*', r'\1', line)
+        # * 문자 완전 제거 (** ** / * * / 단독 * 등 패턴 무관)
+        line = line.replace("*", "")
+
         # __굵게__ 제거
         line = re.sub(r'__(.+?)__', r'\1', line)
         # _이탤릭_ 제거
