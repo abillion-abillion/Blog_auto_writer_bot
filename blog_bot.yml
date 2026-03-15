@@ -1,0 +1,51 @@
+name: 블로그 초안 자동 생성
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 매일 오전 7시 KST (UTC 22:00)
+  workflow_dispatch:
+    inputs:
+      naver_url:
+        description: "네이버 블로그 포스트 URL (column.html 자동 업데이트)"
+        required: false
+        default: ""
+
+jobs:
+  generate-blog-draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # column.html 커밋을 위해 필요
+
+    steps:
+      - name: 레포 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 의존성 설치
+        run: pip install anthropic feedparser requests
+
+      - name: 블로그 초안 생성 및 텔레그램 전송
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.BLOG_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.BLOG_BOT_CHAT_ID }}
+          # workflow_dispatch 에서 URL 입력 시 자동으로 column.html 업데이트
+          NAVER_POST_URL: ${{ github.event.inputs.naver_url }}
+        run: python blog_draft.py
+
+      # column.html이 변경된 경우에만 커밋
+      - name: column.html 변경사항 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add column.html
+          if git diff --cached --quiet; then
+            echo "column.html 변경 없음 - 커밋 건너뜀"
+          else
+            git commit -m "✨ 새 칼럼 추가: $(date +'%Y-%m-%d')"
+            git push
+          fi
