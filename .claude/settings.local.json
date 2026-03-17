@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from sources.rss_collector import collect_all_news; print\\(''sources OK''\\)\")",
+      "Bash(python -c \"from generator.claude_writer import generate_blog_draft; print\\(''generator OK''\\)\")",
+      "Bash(python -c \"from sender.telegram_sender import send_blog_draft; print\\(''sender OK''\\)\")"
+    ]
+  }
+}
