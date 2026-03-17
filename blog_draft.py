@@ -4,17 +4,12 @@
 """
 import sys
 import os
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from sources.rss_collector import collect_all_news, select_top_articles
 from generator.claude_writer import generate_blog_draft, format_for_naver_blog
 from sender.telegram_sender import send_blog_draft
-from publisher.html_publisher import publish_to_html
-
-# column.html 경로 (레포 루트에 있다고 가정)
-COLUMN_HTML_PATH = Path(__file__).parent / "column.html"
 
 
 def main():
@@ -46,40 +41,6 @@ def main():
         draft_text=formatted,
         one_line_summary=draft.get("one_line_summary", "")
     )
-
-    # 5. 네이버 블로그 URL 입력 받기 (환경변수 또는 stdin)
-    #
-    #    ▶ 자동 모드 (GitHub Actions):
-    #      NAVER_POST_URL 환경변수에 URL을 설정하면 자동으로 HTML 업데이트.
-    #      예: NAVER_POST_URL=https://blog.naver.com/moneymustard/12345
-    #
-    #    ▶ 수동 모드 (로컬 실행):
-    #      환경변수 없으면 터미널에서 URL 직접 입력.
-    #      엔터만 누르면 HTML 업데이트 건너뜀.
-    #
-    naver_url = os.environ.get("NAVER_POST_URL", "").strip()
-
-    if not naver_url:
-        print("\n" + "=" * 50)
-        print("📝 네이버 블로그에 글을 발행한 뒤, URL을 입력해주세요.")
-        print("   (건너뛰려면 엔터)")
-        print("   예: https://blog.naver.com/moneymustard/223XXXXXXX")
-        print("=" * 50)
-        try:
-            naver_url = input("🔗 네이버 블로그 URL: ").strip()
-        except EOFError:
-            # CI 환경에서 stdin 없을 때
-            naver_url = ""
-
-    if naver_url:
-        print("\n🌐 column.html 업데이트 중...")
-        ok = publish_to_html(draft, naver_url=naver_url, html_path=COLUMN_HTML_PATH)
-        if ok:
-            print("  ✓ column.html 카드 삽입 완료")
-        else:
-            print("  ⚠ column.html 업데이트 실패 (로그 확인)")
-    else:
-        print("\n  ⏭  column.html 업데이트 건너뜀")
 
     print("\n✅ 완료!")
     print("=" * 50)
