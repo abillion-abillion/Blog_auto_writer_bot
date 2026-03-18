@@ -63,18 +63,22 @@ def send_long_text(text: str) -> None:
 
     total = len(chunks)
     for i, chunk in enumerate(chunks, 1):
-        prefix = f"📄 <b>({i}/{total})</b>\n\n" if total > 1 else ""
+        prefix = f"📄 ({i}/{total})\n\n" if total > 1 else ""
         send_message(f"{prefix}{chunk}")
         import time; time.sleep(0.5)  # 연속 전송 딜레이
 
 
-def send_blog_draft(draft_text: str, one_line_summary: str = "") -> None:
+def send_blog_draft(
+    draft_text: str,
+    one_line_summary: str = "",
+    action_points: list = None,
+) -> None:
     """블로그 초안 텔레그램 전송 (자동 분할)"""
     today = datetime.now().strftime("%Y.%m.%d")
 
     # 헤더 메시지
     header = (
-        f"📝 <b>블로그 초안 생성 완료</b> ({today})\n\n"
+        f"📝 블로그 초안 생성 완료 ({today})\n\n"
         f"💡 {one_line_summary}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
@@ -83,8 +87,23 @@ def send_blog_draft(draft_text: str, one_line_summary: str = "") -> None:
     # 본문 분할 전송
     send_long_text(draft_text)
 
+    # 실천 포인트 별도 메시지 (보장 전송)
+    if action_points:
+        points_text = "✅ 오늘의 실천 포인트\n\n"
+        for i, point in enumerate(action_points, 1):
+            points_text += f"{i}. {point}\n"
+        send_message(points_text.strip())
+
+    # 핵심 요약 별도 메시지 (보장 전송)
+    if one_line_summary:
+        send_message(f"📌 핵심 한 줄 요약\n\n{one_line_summary}")
+
     print(f"  ✓ 텔레그램 전송 완료")
 
 
 if __name__ == "__main__":
-    send_blog_draft("테스트 초안입니다.", "오늘의 경제 한 줄 요약 테스트")
+    send_blog_draft(
+        "테스트 초안입니다.",
+        "오늘의 경제 한 줄 요약 테스트",
+        action_points=["증권사 앱에서 금리 확인하기", "예금 만기일 점검하기"],
+    )

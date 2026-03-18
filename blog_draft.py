@@ -13,6 +13,28 @@ from sources.rss_collector import collect_all_news, select_top_articles
 from generator.claude_writer import generate_blog_draft, format_for_naver_blog
 from sender.telegram_sender import send_blog_draft
 
+# 신버전 여부: action_points 파라미터 존재 확인
+_SENDER_HAS_ACTION_POINTS = "action_points" in inspect.signature(send_blog_draft).parameters
+
+
+def _append_guaranteed_sections(formatted: str, draft: dict) -> str:
+    """본문 끝에 실천 포인트·핵심 요약 보장 섹션 추가"""
+    action_points = draft.get("action_points", [])
+    one_line_summary = draft.get("one_line_summary", "")
+
+    sections = "\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+    if action_points:
+        sections += "\n✅ 오늘의 실천 포인트\n"
+        for i, point in enumerate(action_points, 1):
+            sections += f"  {i}. {point}\n"
+
+    if one_line_summary:
+        sections += f"\n📌 핵심 한 줄 요약\n  {one_line_summary}\n"
+
+    sections += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    return formatted + sections
+
 
 def main():
     print("=" * 50)
@@ -40,34 +62,18 @@ def main():
     # 4. 네이버 블로그 포맷으로 변환
     formatted = format_for_naver_blog(draft)
 
-    # 5. 실천 포인트 / 핵심 요약을 본문 끝에 보장 섹션으로 직접 추가
-    #    sender 버전과 무관하게 텔레그램에 반드시 포함됨
-    action_points = draft.get("action_points", "")
-    one_line_summary = draft.get("one_line_summary", "")
+    # 실천 포인트·핵심 요약을 본문 끝에 보장 섹션으로 추가
+    formatted = _append_guaranteed_sections(formatted, draft)
 
-    guaranteed = "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-    if action_points and action_points.strip():
-        guaranteed += f"\n✅ [오늘의 실천 포인트]\n\n{action_points.strip()}"
-    if one_line_summary and one_line_summary.strip():
-        guaranteed += f"\n\n💡 [핵심 한 줄 요약]\n{one_line_summary.strip()}"
-    guaranteed += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    formatted_final = formatted + guaranteed
-
-    # 6. 텔레그램 전송 - 구버전/신버전 sender 자동 감지
     print("\n📨 텔레그램 전송 중...")
-    sig = inspect.signature(send_blog_draft)
-    if "action_points" in sig.parameters:
-        send_blog_draft(
-            draft_text=formatted_final,
-            one_line_summary=one_line_summary,
-            action_points=action_points,
-        )
-    else:
-        send_blog_draft(
-            draft_text=formatted_final,
-            one_line_summary=one_line_summary,
-        )
+    kwargs = {
+        "draft_text": formatted,
+        "one_line_summary": draft.get("one_line_summary", ""),
+    }
+    if _SENDER_HAS_ACTION_POINTS:
+        kwargs["action_points"] = draft.get("action_points", [])
+
+    send_blog_draft(**kwargs)
 
     print("\n✅ 완료!")
     print("=" * 50)

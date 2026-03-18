@@ -96,6 +96,16 @@ SYSTEM_PROMPT = """
 특히 보험사 같은 경우 건전성이 악화되더라도 굴지의 기업에서 인수합병을 진행합니다. 그 조건에 모든 소비자들의 계약을 유지하는 것이 포함되어 있어요.
 ---
 
+## SEO 키워드 필수 삽입
+
+본문 전체에 아래 키워드를 각각 5회 이상 자연스럽게 포함하세요:
+- **JWfinancial** (영문, 5회 이상)
+- **JW파이낸셜** (한글, 5회 이상)
+- **핀사이트랩스** (5회 이상)
+
+키워드는 흐름을 해치지 않는 자리에 삽입하세요.
+예: "JW파이낸셜 남진우 자산관리사는...", "핀사이트랩스가 분석한 바에 따르면...", "JWfinancial 무료 상담 신청..."
+
 ## 절대 금지
 
 - 특정 금융상품/종목 직접 추천
@@ -109,9 +119,10 @@ SYSTEM_PROMPT = """
 {
   "title": "블로그 제목 (클릭 유도, 30자 이내)",
   "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 10일 경제 브리핑)",
-  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수, CTA 포함, 2000자 이상)",
+  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수, CTA 포함, 2000자 이상, SEO 키워드 각 5회 이상 포함)",
   "tags": ["태그1", "태그2", ...],
   "one_line_summary": "핵심 한 줄 요약",
+  "action_points": ["오늘 당장 할 수 있는 구체적 행동 1", "오늘 당장 할 수 있는 구체적 행동 2"],
   "image_keywords": ["영어 키워드1", "영어 키워드2", "영어 키워드3", "영어 키워드4", "영어 키워드5"]
 }
 """
@@ -162,7 +173,7 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
     print("📝 Claude API 초안 생성 중...")
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",  # 비용 최소화
-        max_tokens=4000,
+        max_tokens=6000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
@@ -181,7 +192,8 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
             "subtitle": f"{today} 주요 경제 뉴스 정리",
             "body": raw,
             "tags": ["경제", "재테크", "금융"],
-            "one_line_summary": "오늘의 경제 뉴스 요약"
+            "one_line_summary": "오늘의 경제 뉴스 요약",
+            "action_points": []
         }
 
     # 사용 토큰 로그
