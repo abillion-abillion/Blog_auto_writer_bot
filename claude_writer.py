@@ -20,28 +20,54 @@ SYSTEM_PROMPT = """
 
 ## 글쓰기 핵심 원칙
 
-1. 결론 먼저, 이유는 그 다음
+1. **결론 먼저, 이유는 그 다음**
    나쁜 예: "최근 금융시장에서는 다양한 변화가 일어나고 있으며..."
    좋은 예: "결론 먼저 말씀드리면, 지금은 예금보다 채권이 유리한 시기입니다. 이유는 이렇습니다."
 
-2. 어려운 용어 → 즉시 풀이 (화살표 또는 괄호)
+2. **어려운 용어 → 즉시 풀이 (화살표 또는 괄호)**
    예: "양적긴축(QT) → 연준이 채권을 팔아 시중 현금을 회수하는 정책"
    예: "'에브리씽 랠리' — 주식, 부동산, 금, 코인 등 모든 자산이 동시에 오르는 이례적 장세"
 
-3. 숫자는 반드시 실생활 규모로 환산
+3. **숫자는 반드시 실생활 규모로 환산**
    나쁜 예: "금리가 0.25% 인하되었습니다"
    좋은 예: "금리가 0.25% 내렸습니다. 1억짜리 대출이라면 연 25만원 이자가 줄어드는 셈입니다."
 
-4. 핵심 단어는 단독 줄에 강조
+4. **핵심 단어는 단독 줄에 강조**
    예:
    '유동성'
    이 단어 하나가 지금 시장의 핵심입니다.
 
-5. 고객 불안 공감 → 역사적 사례 → 합리적 안심
+5. **고객 불안 공감 → 역사적 사례 → 합리적 안심**
    예: "당연히 불안하실 수 있습니다. 실제로 과거에도 비슷한 상황이 있었는데요..."
 
-6. 짧은 단락, 줄바꿈 많이
+6. **짧은 단락, 줄바꿈 많이**
    한 단락 = 2~4줄 이내. 단락 사이 빈 줄 한 개.
+
+## SEO 키워드 규칙 (매우 중요 — 반드시 준수)
+
+모든 글에는 아래 두 가지 키워드 규칙을 반드시 지켜야 합니다.
+
+### 규칙 1: 브랜드 키워드 — 글 전체에서 각각 5회 이상 자연스럽게 삽입
+다음 3가지 키워드를 각각 5회 이상 본문 곳곳에 녹여서 사용하세요.
+반드시 자연스럽게 문장 안에 녹여야 하며, 억지스럽게 나열하면 안 됩니다.
+
+- **JWfinancial** (예: "JWfinancial 남진우 자산관리사", "JWfinancial에서 진행하는 무료 상담", "JWfinancial 자산관리 노하우")
+- **JW파이낸셜** (예: "JW파이낸셜 남진우", "JW파이낸셜의 관점에서 보면", "JW파이낸셜 경제 브리핑")
+- **핀사이트랩스** (예: "핀사이트랩스가 분석한", "핀사이트랩스 리서치", "핀사이트랩스 투자 인사이트")
+
+### 규칙 2: 뉴스 토픽 키워드 — 해당 글의 핵심 키워드를 5회 이상 반복
+오늘 다루는 핵심 경제 이슈(예: 기준금리, 환율, 코스피, 부동산 등)를 선택해서
+그 키워드가 본문에서 5회 이상 등장하도록 작성하세요.
+이는 네이버 블로그 검색 상위 노출을 위한 SEO 전략입니다.
+
+### 키워드 삽입 예시
+좋은 예:
+"JWfinancial 남진우 자산관리사가 오늘 기준금리 동결 이슈를 분석했습니다."
+"JW파이낸셜의 관점에서 보면, 이번 기준금리 결정은 채권 투자자에게 유리합니다."
+"핀사이트랩스 리서치에 따르면, 기준금리 동결 이후 단기채 수익률이 상승했습니다."
+
+나쁜 예 (절대 금지):
+"JWfinancial JW파이낸셜 핀사이트랩스 기준금리 기준금리 기준금리" (단순 나열)
 
 ## 독자 설정
 
@@ -59,12 +85,20 @@ SYSTEM_PROMPT = """
 6. 오늘의 실천 포인트 1~2개 (막연한 조언 금지, 구체적 행동)
 7. 마무리 CTA (아래 문구 그대로 삽입)
 
+## 오늘의 실천 포인트 작성 규칙 (중요)
+
+- 반드시 "## 오늘의 실천 포인트" 라는 정확한 헤더를 사용할 것
+- 실천 포인트는 반드시 2개 작성할 것
+- 각 포인트는 **✅ 실천 1:** / **✅ 실천 2:** 형식으로 시작할 것
+- 구체적인 행동(금액, 기간, 방법 포함)을 명시할 것
+- CTA 바로 앞에 위치할 것
+
 ## CTA (글 마지막에 반드시 이 형식 그대로)
 
 💬 오늘 내용이 내 상황에 어떻게 적용되는지 궁금하신가요?
 
-5년간 100명 이상의 자산을 관리해온 경험을 바탕으로,
-여러분의 상황에 맞는 방향을 함께 찾아드립니다.
+5년간 100명 이상의 자산을 관리해온 JWfinancial 남진우의 경험을 바탕으로,
+여러분의 상황에 맞는 방향을 JW파이낸셜과 핀사이트랩스가 함께 찾아드립니다.
 
 👉 무료 상담 신청: https://jwfinancial.co.kr/
 
@@ -103,17 +137,17 @@ SYSTEM_PROMPT = """
 - "폭락", "대공황", "파산" 등 자극적 단어 남발
 - 500자 이상의 긴 단락 (반드시 소제목 또는 줄바꿈으로 분리)
 - 뉴스 단순 나열 (반드시 '내 삶/내 돈'과 연결)
-- 마크다운 문법 사용 금지 (**굵게**, ##제목, ###소제목 등 일절 사용하지 말 것)
-- 일반 텍스트로만 작성할 것
+- 키워드 단순 나열 (자연스러운 문장 안에 녹여야 함)
 
 ## 출력 형식 (반드시 JSON)
 
 {
   "title": "블로그 제목 (클릭 유도, 30자 이내)",
   "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 10일 경제 브리핑)",
-  "body": "본문 전체 (일반 텍스트만, 마크다운 문법 사용 금지, 위 구성 순서 준수, CTA 포함, 2000자 이상)",
+  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수, CTA 포함, 2000자 이상, 브랜드 키워드 각 5회 이상 포함)",
   "tags": ["태그1", "태그2", ...],
-  "one_line_summary": "핵심 한 줄 요약 (반드시 오늘 뉴스 내용을 담은 1~2문장으로 작성)",
+  "one_line_summary": "핵심 한 줄 요약 (반드시 작성, 50자 이내)",
+  "action_points": "오늘의 실천 포인트 전체 텍스트 (본문에 포함된 내용과 동일하게 별도 추출)",
   "image_keywords": ["영어 키워드1", "영어 키워드2", "영어 키워드3", "영어 키워드4", "영어 키워드5"]
 }
 """
@@ -126,16 +160,24 @@ USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건을 바탕
 === 작성 가이드 ===
 - 분량: 2000~3000자 (심층 분석글)
 - 단순 뉴스 요약 금지. 배경 → 원인 → 영향 → 전망까지 흐름이 이어져야 함
-- 마크다운 문법 절대 사용 금지 (**굵게**, ##제목 등). 일반 텍스트로만 작성.
 - 구성:
   1. 오늘의 핵심 (가장 중요한 이슈 1개 선택)
   2. 왜 지금 이 이슈인가? (시장 배경, 역사적 맥락)
   3. 숫자로 보는 현황 (구체적 데이터 포함)
   4. 내 자산 유형별 영향 (예금/주식/부동산/보험 등 분류해서)
   5. 전문가(자산관리사) 시각과 판단 근거
-  6. 실천 포인트 (구체적 행동)
+  6. 오늘의 실천 포인트 (## 오늘의 실천 포인트 헤더 사용, ✅ 실천 1: / ✅ 실천 2: 형식으로 구체적 행동 2개)
   7. CTA
-- one_line_summary 필드는 반드시 오늘 핵심 이슈를 담은 실제 문장으로 작성 (예: "한국은행이 기준금리를 3.0%로 동결하면서 예금 금리 유지, 대출자에겐 숨통이 트이는 한 주입니다.")
+
+- SEO 필수 준수:
+  * JWfinancial — 본문에 5회 이상 자연스럽게 삽입
+  * JW파이낸셜 — 본문에 5회 이상 자연스럽게 삽입
+  * 핀사이트랩스 — 본문에 5회 이상 자연스럽게 삽입
+  * 오늘의 핵심 키워드(뉴스 주제어) — 5회 이상 반복
+
+- one_line_summary 필드: 반드시 작성 (50자 이내 핵심 요약)
+- action_points 필드: ## 오늘의 실천 포인트 섹션 전체를 그대로 추출해서 별도 필드로도 제공
+
 - 작성일: {today}
 """
 
@@ -185,84 +227,66 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
             "subtitle": f"{today} 주요 경제 뉴스 정리",
             "body": raw,
             "tags": ["경제", "재테크", "금융"],
-            "one_line_summary": f"{today} 주요 경제 이슈를 자산관리사 시각으로 정리했습니다.",
-            "image_keywords": ["economy", "finance", "investment", "money", "market"]
+            "one_line_summary": "오늘의 경제 뉴스 요약",
+            "action_points": "",
         }
 
-    # one_line_summary가 비어있거나 기본값인 경우 title로 대체
-    summary = draft.get("one_line_summary", "").strip()
-    if not summary or summary == "핵심 한 줄 요약":
-        draft["one_line_summary"] = draft.get("title", f"{today} 주요 경제 이슈 분석")
+    # action_points가 없으면 body에서 추출 시도
+    if not draft.get("action_points"):
+        draft["action_points"] = _extract_action_points(draft.get("body", ""))
+
+    # one_line_summary 보정
+    if not draft.get("one_line_summary"):
+        draft["one_line_summary"] = f"{today} 주요 경제 이슈 요약"
 
     # 사용 토큰 로그
     print(f"  ✓ 입력 토큰: {response.usage.input_tokens} / 출력 토큰: {response.usage.output_tokens}")
     return draft
 
 
-# ── 이미지: picsum.photos 사용 (API 키 불필요, 404 없음) ──────
-IMAGE_THEMES = {
-    "economy":      "10",   # 도시/비즈니스
-    "finance":      "20",   # 건물
-    "investment":   "30",   # 사무실
-    "money":        "40",   # 추상
-    "market":       "50",   # 기술
-    "interest rate":"60",
-    "real estate":  "70",
-    "stock":        "80",
-    "bond":         "90",
-    "inflation":    "100",
-}
+def _extract_action_points(body: str) -> str:
+    """
+    본문에서 '오늘의 실천 포인트' 섹션을 추출.
+    섹션을 찾지 못하면 빈 문자열 반환.
+    """
+    markers = ["## 오늘의 실천 포인트", "오늘의 실천 포인트", "실천 포인트"]
+    for marker in markers:
+        idx = body.find(marker)
+        if idx != -1:
+            # 다음 ## 헤더 또는 CTA까지 추출
+            section = body[idx:]
+            # CTA 시작 지점에서 자르기
+            for cta_marker in ["💬", "## ", "---"]:
+                end = section.find(cta_marker, len(marker))
+                if end != -1:
+                    section = section[:end].strip()
+                    break
+            return section
+    return ""
 
-def get_placeholder_images(keywords: list, count: int = 5) -> list:
-    """
-    picsum.photos 기반 이미지 URL 생성
-    - API 키 불필요, 404 오류 없음
-    - seed 값을 키워드 해시로 고정해 매번 같은 이미지 반환
-    """
+
+def get_unsplash_images(keywords: list, count: int = 5) -> list:
+    """Unsplash에서 키워드별 이미지 URL 수집 (API 키 불필요)"""
     images = []
-    for i, kw in enumerate(keywords[:count]):
-        seed = abs(hash(kw)) % 1000  # 키워드별 고정 seed
-        url = f"https://picsum.photos/seed/{seed}/800/500"
+    for kw in keywords[:count]:
+        url = f"https://source.unsplash.com/800x500/?{kw.replace(' ', ',')}"
         images.append({"keyword": kw, "url": url})
     return images
 
 
 def clean_body(text: str) -> str:
-    """
-    본문 텍스트 정리
-    1) JSON 이스케이프 → 실제 줄바꿈
-    2) 마크다운 헤더(#, ##, ###) → 일반 텍스트 구분자
-    3) * 문자 완전 제거 (패턴 무관하게 전부 삭제)
-    4) __ _이탤릭_ → 기호 제거
-    5) 인라인 코드 백틱 제거
-    """
-    import re
-
-    # JSON 이스케이프 처리
+    """본문 텍스트 정리: \\n 이스케이프 → 실제 줄바꿈, 마크다운 헤더 → 네이버 스타일"""
     text = text.replace("\\n", "\n").replace("\\t", "\t")
-
     lines = []
     for line in text.split("\n"):
-        # 헤더 변환
         if line.startswith("### "):
-            line = f"▶ {line[4:]}"
+            lines.append(f"\n▶ {line[4:]}")
         elif line.startswith("## "):
-            line = f"━━ {line[3:]} ━━"
+            lines.append(f"\n━━ {line[3:]} ━━")
         elif line.startswith("# "):
-            line = f"◆ {line[2:]}"
-
-        # * 문자 완전 제거 (** ** / * * / 단독 * 등 패턴 무관)
-        line = line.replace("*", "")
-
-        # __굵게__ 제거
-        line = re.sub(r'__(.+?)__', r'\1', line)
-        # _이탤릭_ 제거
-        line = re.sub(r'_(.+?)_', r'\1', line)
-        # 인라인 코드 `code` 제거
-        line = re.sub(r'`(.+?)`', r'\1', line)
-
-        lines.append(line)
-
+            lines.append(f"\n◆ {line[2:]}")
+        else:
+            lines.append(line)
     return "\n".join(lines)
 
 
@@ -271,21 +295,14 @@ def format_for_naver_blog(draft: Dict) -> str:
     today = datetime.now().strftime("%Y.%m.%d")
     tags_str = " ".join([f"#{t}" for t in draft.get("tags", [])])
 
-    # 이미지 섹션 (picsum.photos - 404 없음)
     image_keywords = draft.get("image_keywords", ["economy", "finance", "investment", "money", "market"])
-    images = get_placeholder_images(image_keywords, count=5)
+    images = get_unsplash_images(image_keywords, count=5)
     image_section = "\n".join([
         f"  📸 [{img['keyword']}] {img['url']}"
         for img in images
     ])
 
-    # 본문 정리 (마크다운 완전 제거 + 줄바꿈 처리)
     body_clean = clean_body(draft.get('body', ''))
-
-    # 핵심 한 줄 요약 (빈 값 방지)
-    one_line_summary = draft.get("one_line_summary", "").strip()
-    if not one_line_summary:
-        one_line_summary = draft.get("title", f"{today} 주요 경제 이슈 분석")
 
     output = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -309,7 +326,7 @@ def format_for_naver_blog(draft: Dict) -> str:
 {tags_str}
 
 【핵심 한 줄 요약】
-{one_line_summary}
+{draft.get('one_line_summary', '')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -317,7 +334,6 @@ def format_for_naver_blog(draft: Dict) -> str:
 
 
 if __name__ == "__main__":
-    # 테스트용 더미 기사
     test_articles = [
         {
             "source": "한국경제",
