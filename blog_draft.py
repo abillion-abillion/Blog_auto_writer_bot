@@ -4,6 +4,7 @@
 """
 import sys
 import os
+import inspect
 
 # 경로 설정
 sys.path.insert(0, os.path.dirname(__file__))
@@ -39,15 +40,34 @@ def main():
     # 4. 네이버 블로그 포맷으로 변환
     formatted = format_for_naver_blog(draft)
 
-    # 5. 텔레그램 전송
-    #    - one_line_summary: 핵심 요약 (별도 보장 전송)
-    #    - action_points:    실천 포인트 (별도 보장 전송 — 절대 잘리지 않음)
+    # 5. 실천 포인트 / 핵심 요약을 본문 끝에 보장 섹션으로 직접 추가
+    #    sender 버전과 무관하게 텔레그램에 반드시 포함됨
+    action_points = draft.get("action_points", "")
+    one_line_summary = draft.get("one_line_summary", "")
+
+    guaranteed = "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if action_points and action_points.strip():
+        guaranteed += f"\n✅ [오늘의 실천 포인트]\n\n{action_points.strip()}"
+    if one_line_summary and one_line_summary.strip():
+        guaranteed += f"\n\n💡 [핵심 한 줄 요약]\n{one_line_summary.strip()}"
+    guaranteed += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    formatted_final = formatted + guaranteed
+
+    # 6. 텔레그램 전송 - 구버전/신버전 sender 자동 감지
     print("\n📨 텔레그램 전송 중...")
-    send_blog_draft(
-        draft_text=formatted,
-        one_line_summary=draft.get("one_line_summary", ""),
-        action_points=draft.get("action_points", ""),
-    )
+    sig = inspect.signature(send_blog_draft)
+    if "action_points" in sig.parameters:
+        send_blog_draft(
+            draft_text=formatted_final,
+            one_line_summary=one_line_summary,
+            action_points=action_points,
+        )
+    else:
+        send_blog_draft(
+            draft_text=formatted_final,
+            one_line_summary=one_line_summary,
+        )
 
     print("\n✅ 완료!")
     print("=" * 50)
