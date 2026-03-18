@@ -2,6 +2,7 @@
 텔레그램 초안 전송 모듈
 - 섹션 인식 분할: 실천 포인트·핵심 요약이 잘리지 않도록 보장
 - 실천 포인트 / 핵심 한 줄 요약은 별도 메시지로 항상 전송
+- parse_mode 없음: 본문 특수문자(<>&)로 인한 HTML 파싱 오류 방지
 """
 import os
 import time
@@ -18,21 +19,34 @@ BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 MSG_LIMIT = 3800
 
 
+def _safe_text(text: str) -> str:
+    """
+    텔레그램 plain text 전송용 안전 처리.
+    마크다운/HTML 파싱 없이 보내므로 특수문자 그대로 유지.
+    단, 4096자 초과 방지를 위해 앞에서 자름 (정상적으로는 send_long_text가 처리).
+    """
+    return text[:4000] if len(text) > 4000 else text
+
+
 def send_message(text: str) -> bool:
-    """텍스트 메시지 전송 (4096자 이내)"""
+    """
+    텍스트 메시지 전송.
+    parse_mode 없이 plain text로 전송 → <>&* 등 특수문자 오류 없음.
+    """
     resp = requests.post(
         f"{BASE_URL}/sendMessage",
         json={
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": text,
-            "parse_mode": "HTML",
+            "text": _safe_text(text),
+            # parse_mode 의도적으로 제거: 본문의 <, >, & 때문에 HTML 파싱 오류 발생
             "disable_web_page_preview": True,
         },
         timeout=10,
     )
     ok = resp.status_code == 200
     if not ok:
-        print(f"  ⚠️ 메시지 전송 실패: {resp.status_code} {resp.text[:200]}")
+        print(f"  ⚠️ 메시지 전송 실패: HTTP {resp.status_code}")
+        print(f"     응답: {resp.text[:300]}")
     return ok
 
 
@@ -135,7 +149,7 @@ def send_long_text(text: str) -> None:
 
     total = len(chunks)
     for i, chunk in enumerate(chunks, 1):
-        prefix = f"📄 <b>({i}/{total})</b>\n\n" if total > 1 else ""
+        prefix = f"📄 ({i}/{total})\n\n" if total > 1 else ""
         send_message(f"{prefix}{chunk}")
         time.sleep(0.5)
 
@@ -158,7 +172,7 @@ def send_blog_draft(
 
     # ── 1. 헤더 ───────────────────────────────────────────────
     header = (
-        f"📝 <b>블로그 초안 생성 완료</b> ({today})\n\n"
+        f"📝 블로그 초안 생성 완료 ({today})\n\n"
         f"💡 {one_line_summary}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
@@ -173,7 +187,7 @@ def send_blog_draft(
     if action_points and action_points.strip():
         ap_msg = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "✅ <b>[오늘의 실천 포인트 — 별도 전송]</b>\n\n"
+            "✅ [오늘의 실천 포인트 — 별도 전송]\n\n"
             f"{action_points.strip()}"
         )
         send_message(ap_msg)
@@ -187,7 +201,7 @@ def send_blog_draft(
     if one_line_summary and one_line_summary.strip():
         summary_msg = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 <b>[핵심 한 줄 요약 — 별도 전송]</b>\n\n"
+            "💡 [핵심 한 줄 요약 — 별도 전송]\n\n"
             f"{one_line_summary.strip()}"
         )
         send_message(summary_msg)
@@ -214,7 +228,7 @@ def _try_resend_action_points(draft_text: str) -> None:
             if section.strip():
                 msg = (
                     "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "✅ <b>[오늘의 실천 포인트 — 별도 전송]</b>\n\n"
+                    "✅ [오늘의 실천 포인트 — 별도 전송]\n\n"
                     f"{section.strip()}"
                 )
                 send_message(msg)
