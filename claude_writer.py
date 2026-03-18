@@ -208,7 +208,7 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
     print("📝 Claude API 초안 생성 중...")
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",  # 비용 최소화
-        max_tokens=4000,
+        max_tokens=6000,  # 4000이면 JSON 끝이 잘림 → 6000으로 상향
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
