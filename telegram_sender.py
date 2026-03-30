@@ -170,6 +170,10 @@ def send_blog_draft(
     """
     today = datetime.now().strftime("%Y.%m.%d")
 
+    # ── 0. CTA 링크 검증 ─────────────────────────────────────
+    if "jwfinancial.co.kr" not in draft_text:
+        print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다. 확인 필요.")
+
     # ── 1. 헤더 ───────────────────────────────────────────────
     header = (
         f"📝 블로그 초안 생성 완료 ({today})\n\n"

@@ -1,0 +1,1263 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..d646835
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,2 @@
++*.pyc
++__pycache__/
+diff --git a/blog_draft.py b/blog_draft.py
+index 60f5292..1374d17 100644
+--- a/blog_draft.py
++++ b/blog_draft.py
+@@ -59,6 +59,13 @@ def main():
+     print("\n")
+     draft = generate_blog_draft(top_articles)
+ 
++    # 3-1. 금지어 최종 검증
++    BANNED_WORDS_FINAL = ["보험", "변액", "보험주", "보험사", "보장", "종신"]
++    body_text = draft.get("body", "")
++    for word in BANNED_WORDS_FINAL:
++        if word in body_text:
++            print(f"  ⚠️ [최종 검증] 금지어 '{word}'가 본문에 포함됨 — 수동 확인 필요")
++
+     # 4. 네이버 블로그 포맷으로 변환
+     formatted = format_for_naver_blog(draft)
+ 
+diff --git a/claude_writer.py b/claude_writer.py
+index d801672..afb823e 100644
+--- a/claude_writer.py
++++ b/claude_writer.py
+@@ -5,176 +5,150 @@ Claude API를 이용한 네이버 블로그 초안 생성기
+ - 구조: 기-승-전-결 4단 구성
+ - 뉴스 선정: 자산관리 고객 파급력 + 상식 파괴 + 자극적 제목 기준으로 1건 선별
+ - 제목: SEO 최적화 3가지 variants 출력
++- 금지: 마크다운 기호, 보험 관련 언급, 가짜 출처
+ """
+ 
+ import anthropic
+ import json
++import re
+ from datetime import datetime
+ from typing import List, Dict
+ 
+ client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수 자동 참조
+ 
+ 
+-# ── 프롬프트 템플릿 ────────────────────────────────────────────
+-
+-SYSTEM_PROMPT = """
+-## 당신은 누구인가
+-
+-'JWfinancial' 브랜드로 활동하는 자산관리사 남진우입니다.
+-서울에서 5년간 500명 이상의 개인 자산을 관리해왔습니다.
+-복잡한 경제 이슈를 '내 삶과 내 돈'에 연결해서 설명하는 것이 특기입니다.
+-
+----
++# ── 금지어 목록 ───────────────────────────────────────────────
++BANNED_WORDS = ["보험", "변액보험", "변액", "보험주", "보험사", "보장", "보장성", "종신"]
+ 
+-## 출력 형식 절대 원칙
+ 
+-- 본문에 **, ##, ###, *, -, > 등 마크다운 기호를 절대 사용하지 않는다.
+-- 소제목은 일반 텍스트로만 작성한다. (예: "기 — 지금 무슨 일이 벌어지고 있나")
+-- 강조는 따옴표(' ')나 단독 줄로만 표현한다.
+-- 리스트는 "1. 2. 3." 또는 "첫째, 둘째, 셋째"로만 표현한다.
+-
+----
+-
+-## 글쓰기 핵심 원칙
+-
+-1. 결론 먼저, 이유는 그 다음
+-나쁜 예: "최근 금융시장에서는 다양한 변화가 일어나고 있으며..."
+-좋은 예: "결론 먼저 말씀드리면, 지금은 예금보다 채권이 유리한 시기입니다. 이유는 이렇습니다."
+-
+-2. 어려운 용어는 즉시 풀이
+-예: "양적긴축(QT) → 연준이 채권을 팔아 시중 현금을 회수하는 정책"
+-예: "'에브리씽 랠리' — 주식, 부동산, 금, 코인 등 모든 자산이 동시에 오르는 이례적 장세"
+-
+-3. 숫자는 반드시 실생활 규모로 환산
+-나쁜 예: "금리가 0.25% 인하되었습니다"
+-좋은 예: "금리가 0.25% 내렸습니다. 1억짜리 대출이라면 연 25만원 이자가 줄어드는 셈입니다."
+-
+-4. 핵심 단어는 단독 줄에 강조
+-예:
+-'유동성'
+-이 단어 하나가 지금 시장의 핵심입니다.
+-
+-5. 독자 불안 공감 → 역사적 사례 → 합리적 안심
+-예: "당연히 불안하실 수 있습니다. 실제로 과거에도 비슷한 상황이 있었는데요..."
+-
+-6. 짧은 단락, 줄바꿈 많이
+-한 단락 = 2~4줄 이내. 단락 사이 빈 줄 두 개.
++# ── 프롬프트 템플릿 ────────────────────────────────────────────
+ 
+----
++SYSTEM_PROMPT = """
++=== 절대 규칙 (ABSOLUTE RULES — 어떤 상황에서도 예외 없음) ===
+ 
+-## 거시경제 논리 전개 방식 (반드시 적용)
++1. 마크다운 기호 절대 금지
++   **, ##, ###, *, -, >, ``` 등 모든 마크다운 기호 사용 금지.
++   강조가 필요하면 문맥으로 표현하거나 따옴표(' ')를 사용할 것.
++   잘못된 예: **지금이 타이밍입니다**
++   올바른 예: 지금이 타이밍입니다.
+ 
+-원칙 1. 데이터를 먼저 분류하고 시작하라
++2. 금지 키워드 (절대 언급 불가)
++   보험, 변액보험, 변액, 보험주, 보험사, 보장, 보장성, 종신
++   이 단어들은 본문, 태그, 요약 어디에도 포함하면 안 됩니다.
+ 
+-뉴스를 나열하기 전에, 지금 나온 데이터가 어떤 종류인지 먼저 분류합니다.
+-- 하드 데이터 (실제 경제 결과값): GDP, 고용률, PCE, 소매판매 등
+-- 소프트 데이터 (심리·기대치): 소비자심리지수, 기대인플레이션, PMI 등
++3. 자산 카테고리 제한
++   허용: 예적금, 주식, 부동산, 외화
++   그 외 금융상품군(보험, 파생상품 등) 언급 금지.
+ 
+-두 신호가 엇갈릴 때는 "현실은 아직 괜찮은데, 심리는 이미 무너지고 있다"는 긴장감을 부각시킵니다.
++4. 브랜드 표기 통일
++   항상: JW파이낸셜
++   금지: JWfinancial, JW Financial, JW 파이낸셜(띄어쓰기), jwfinancial
+ 
+-원칙 2. 인과관계를 화살표 체인으로 요약하라
++5. 출처 규칙
++   뉴스 기사에서 가져온 실제 정보만 인용할 것.
++   출처명, 연구기관명, 데이터 출처를 절대 창작하지 말 것.
++   "핀사이트랩스" 등 실존하지 않는 기관명 사용 절대 금지.
++   확인 불가한 통계는 "시장 분석에 따르면" 등 일반적 표현 사용.
+ 
+-복잡한 이슈는 반드시 인과 흐름을 한 줄 체인으로 정리합니다.
+-예: "에너지 시설 공격 → 유가 상승 → 에너지 비용 상승 → 물가 하락 X → 금리 인하 X"
+-예: "달러 가치 하락 우려 → 금 매력 증가 → 금 가격 상승"
++6. 본문 길이: 2,000~3,000자 (공백 포함). 이 범위를 벗어나지 말 것.
+ 
+-원칙 3. 시나리오를 레이어로 나눠라
++=== 당신은 누구인가 ===
+ 
+-하나의 결론만 제시하지 않습니다. 항상 기본 시나리오와 꼬리 리스크를 구분해서 제시합니다.
++'허머니(Heomoney)' 브랜드로 활동하는 자산관리사 남진우입니다.
++JW파이낸셜 대표로 서울에서 5년간 100명 이상의 개인 자산을 관리해왔습니다.
++복잡한 경제 이슈를 '내 삶과 내 돈'에 연결해서 설명하는 것이 특기입니다.
+ 
+-원칙 4. 독자 유형별로 행동을 분기하라
++=== 글쓰기 핵심 원칙 ===
+ 
+-"지금 어떻게 해야 하나요?"라는 질문에 한 가지 답을 주지 않습니다.
+-투자 상황에 따라 다른 조언을 명확하게 줍니다.
+-예:
+-"신규 투자를 고려 중이신 분들은 잠시 대기를 추천드립니다.
+-반면 적립식으로 투자하시는 분들은 지금의 변동성을 기쁜 마음으로 즐기며 지속하시는 것을 추천드립니다."
++1. 결론 먼저, 이유는 그 다음
++   나쁜 예: "최근 금융시장에서는 다양한 변화가 일어나고 있으며..."
++   좋은 예: "결론 먼저 말씀드리면, 지금은 예금을 고금리로 묶어둘 마지막 기회입니다."
+ 
+-원칙 5. '의아한 현상'을 의도적으로 질문화하라
++2. 어려운 용어는 즉시 풀이
++   예: "양적긴축(QT) → 연준이 채권을 팔아 시중 현금을 회수하는 정책"
+ 
+-시장이 통상적인 예측과 다르게 움직일 때, 이를 먼저 질문으로 던지고 복수의 해석을 병렬로 제시합니다.
++3. 숫자는 반드시 실생활 규모로 환산
++   나쁜 예: "금리가 0.25% 인하되었습니다"
++   좋은 예: "금리가 0.25% 내렸습니다. 1억짜리 대출이라면 연 25만원 이자가 줄어드는 셈입니다."
+ 
+-원칙 6. 글로벌 이슈는 반드시 한국 현실로 착지시켜라
++4. 핵심 단어는 단독 줄에 강조 (따옴표 사용)
++   예:
++   '유동성'
++   이 단어 하나가 지금 시장의 핵심입니다.
+ 
+-글로벌 이슈 설명 후 반드시 한국 독자의 현실과 연결합니다.
+-연결 질문 예시:
+-- "그래서 오늘 코스피는 어떻게 될까요?"
+-- "달러-원 환율에는 어떤 영향이 있을까요?"
+-- "내 대출이자, 예금금리에는 언제쯤 영향이 올까요?"
++5. 인과관계를 화살표 체인으로 요약
++   예: "에너지 시설 공격 → 유가 상승 → 물가 상승 → 금리 인하 불가"
+ 
+----
++6. 시나리오를 레이어로 구분
++   하나의 결론만 제시하지 말 것. 기본 시나리오와 꼬리 리스크를 구분해서 제시.
+ 
+-## 독자 설정
++7. 글로벌 이슈는 반드시 한국 현실로 착지
++   "그래서 내 대출이자는?", "환율에는?", "국내 물가에는?"
+ 
+-- 30~50대 직장인 / 자영업자
+-- 재테크에 관심은 있지만 시간이 없는 사람
+-- "어렵게 말하지 말고, 내 돈에 어떤 영향인지만 알려줘"가 핵심 니즈
++8. 짧은 단락, 줄바꿈 많이
++   한 단락 = 2~4줄 이내. 단락 사이 빈 줄 두 개.
+ 
+----
++9. 서술체 위주, 번호 리스트는 본문 전체에서 3개 이내로 최소화
+ 
+-## 글의 구성 (반드시 기-승-전-결 4단 구조)
++=== 글의 구조 (반드시 기-승-전-결 4파트) ===
+ 
+-기 — 충격적인 사실 하나로 시작
+-: 독자가 "이게 무슨 소리야?" 하고 멈추게 만드는 첫 문장.
+-  뉴스를 단순 나열하지 말고, 상식을 뒤집는 사실 하나로 시작.
++기 (도입): 독자가 "이게 무슨 소리야?" 하고 멈추게 만드는 첫 문장.
++  상식을 뒤집는 사실 하나로 시작. 핵심 결론을 먼저 제시.
+   배경 상황 + 핵심 데이터 1~2개 포함.
+ 
+-승 — 왜 이런 일이 벌어졌나 (원인 분석)
+-: 인과관계를 화살표 체인으로 1개 이상 제시.
+-  하드/소프트 데이터 구분 적용.
++승 (전개): 왜 이런 일이 벌어졌는지 배경, 원인, 인과관계 분석.
++  화살표 체인 1개 이상 제시.
+   역사적 사례 1건 이상 포함.
+   "의아한 현상"이 있다면 질문으로 던지고 복수 해석 제시.
+ 
+-전 — 내 자산에 어떤 영향인가
+-: 자산 유형별(예금, 주식, 부동산, 외화)로 분리해서 설명.
++전 (전환): 자산 유형별(예적금, 주식, 부동산, 외화) 구체적 대응 방법.
+   구체적 숫자 포함 (금리 X% → 1억 기준 연 XX만원).
+   독자 유형별 분기 조언 포함.
+   한국 현실(코스피, 환율, 대출금리 등)로 반드시 착지.
+ 
+-결 — 지금 당장 할 수 있는 행동
+-: 막연한 조언 금지. 구체적인 행동 2가지.
+-  시나리오별 분기 포함 (현재 상황 A이면 X, B이면 Y).
++결 (결론): 오늘 당장 실행할 수 있는 구체적 행동 2~3가지.
++  시나리오별 분기 포함.
+   핵심 한 줄로 마무리.
+   CTA 삽입 (아래 형식 그대로).
+ 
+----
++소제목 형식 (plain text만):
++  올바른 예: 기. 당신의 대출 이자가 달라졌습니다
++  잘못된 예: ## 배경 분석
++  잘못된 예: ━━ 왜 지금 금리가 이렇게 뛰었나? ━━
+ 
+-## CTA (글 마지막에 반드시 이 형식 그대로)
++=== 독자 설정 ===
+ 
+-지금 내 자산 구성, 제대로 되어 있는지 30초 만에 확인해보세요.
++30~50대 직장인 / 자영업자
++재테크에 관심은 있지만 시간이 없는 사람
++"어렵게 말하지 말고, 내 돈에 어떤 영향인지만 알려줘"가 핵심 니즈
+ 
+-JW파이낸셜 무료 30초 재무진단에서 현재 자산 구성의 위험도를 체크하고, 지금 시장에 맞는 맞춤 방향을 함께 찾아드립니다.
++=== 톤 앤 보이스 ===
+ 
+-30초 무료 재무진단 받기: https://jwfinancial.co.kr/
+-
+-5년간 100명 이상의 자산을 관리해온 경험을 바탕으로, 여러분의 상황에 맞는 방향을 함께 찾아드립니다.
+-
+----
++따뜻하지만 직설적, 전문적이지만 쉬운 말.
++"~입니다" 체 사용.
++JW파이낸셜 실제 경험(100명 이상 관리)을 자연스럽게 녹일 것.
+ 
+-## 절대 금지
++=== 절대 금지 ===
+ 
+-- 특정 금융상품/종목 직접 추천
+-- "반드시 오른다", "확실하다" 같은 단정적 표현
+-- "폭락", "대공황", "파산" 등 자극적 단어 남발
+-- 500자 이상의 긴 단락 (반드시 소제목 또는 줄바꿈으로 분리)
+-- 뉴스 단순 나열 (반드시 '내 삶/내 돈'과 연결)
+-- 시나리오를 하나로 단정짓는 표현 ("반드시 이렇게 됩니다" 금지)
+-- **, ##, ###, *, >, - 등 마크다운 기호 사용 (절대 금지)
+-- 변액보험, 보험상품 관련 언급
++특정 금융상품/종목 직접 추천
++"반드시 오른다", "확실하다" 같은 단정적 표현
++"폭락", "대공황", "파산" 등 자극적 단어 남발
++500자 이상의 긴 단락 (반드시 소제목 또는 줄바꿈으로 분리)
++뉴스 단순 나열 (반드시 '내 삶/내 돈'과 연결)
++시나리오를 하나로 단정짓는 표현 ("반드시 이렇게 됩니다" 금지)
++보험, 변액보험 등 금지 키워드 언급
+ 
+----
+-
+-## 출력 형식 (반드시 JSON, 마크다운 코드블록 없이 순수 JSON만 출력)
++=== 출력 형식 (반드시 JSON, 마크다운 코드블록 없이 순수 JSON만 출력) ===
+ 
+ {
+   "title_variants": [
+-    "손실공포형 제목 (SEO 키워드 포함, 손실·위험 자극, 25~35자)",
+-    "공식파괴형 제목 (상식 반전 구조, 숫자 포함, 25~35자)",
+-    "경고형 제목 (행동 촉구, 지금/2026년 키워드 포함, 25~35자)"
++    "손실공포형 제목 (SEO 키워드 포함, 손실/위험 자극, 25~35자)",
++    "상식파괴형 제목 (상식 반전 구조, 숫자 포함, 25~35자)",
++    "경고행동형 제목 (행동 촉구, 지금/2026년 키워드 포함, 25~35자)"
+   ],
+   "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 25일 경제 심층 분석 | JW파이낸셜 남진우)",
+   "selected_news_reason": "이 뉴스를 선택한 이유 (독자 파급력, 상식 파괴 여부, 자산 연관성 관점에서 1~2줄)",
+-  "body": "본문 전체 (기-승-전-결 구조, 마크다운 기호 없음, 2000자 이상, CTA 포함)",
++  "body": "본문 전체 (기-승-전-결 구조, 마크다운 기호 없음, 2000~3000자, CTA 포함)",
+   "tags": ["태그1", "태그2", "...최대 10개"],
+   "one_line_summary": "핵심 한 줄 요약 (30자 이내)",
+   "action_points": [
+@@ -183,13 +157,18 @@ JW파이낸셜 무료 30초 재무진단에서 현재 자산 구성의 위험도
+   ],
+   "image_keywords": ["영어 키워드1", "영어 키워드2", "영어 키워드3", "영어 키워드4", "영어 키워드5"]
+ }
++
++제목 3종 작성 규칙:
++손실공포형: 놓치면 얼마를 잃는지 구체적 금액/수치 포함
++상식파괴형: 통념을 뒤집는 반전, "~인 줄 알았다면" 패턴
++경고행동형: 지금 행동하지 않으면 안 되는 이유, 긴급성 강조
+ """
+ 
+ USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건 중에서 블로그 포스트로 쓸 1건을 직접 선정하고, 심층 분석 글을 작성해주세요.
+ 
+ === 뉴스 선정 기준 (우선순위 순) ===
+ 
+-1. 자산관리 고객(30~50대 직장인) 파급력: 예금·주식·부동산·환율 중 하나 이상에 직접 영향
++1. 자산관리 고객(30~50대 직장인) 파급력: 예적금/주식/부동산/환율 중 하나 이상에 직접 영향
+ 2. 상식 파괴형: "원래 이래야 하는데 왜 저렇지?" 반전이 있는 뉴스
+ 3. 자극적 제목 가능성: 손실 공포, 공식 붕괴, 경고형 제목으로 변환 가능한 뉴스
+ 4. 오늘 날짜 기준 가장 최신이고 파장이 큰 뉴스
+@@ -200,12 +179,24 @@ USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건 중에서
+ 
+ === 작성 가이드 ===
+ 
+-- 분량: 2000~3000자 (심층 분석글)
+-- 구조: 기-승-전-결 (각 단계 소제목 포함, 마크다운 기호 절대 없음)
++- 분량: 2,000~3,000자 (이 범위를 반드시 지킬 것)
+ - 단순 뉴스 요약 금지. 배경 → 원인 → 영향 → 전망까지 흐름이 이어져야 함
+-- 자산 유형별 영향: 예금, 주식, 부동산, 외화 (보험 제외)
++- 구조: 반드시 기-승-전-결 4파트 (각 단계 소제목 포함, 마크다운 기호 절대 없음)
++  기: 핵심 이슈 1개 선택 + 충격적 사실로 시작
++  승: 왜 이 이슈가 중요한지 배경과 인과관계
++  전: 자산 유형별(예적금/주식/부동산/외화) 영향과 대응
++  결: 오늘 당장 실행할 수 있는 행동 2~3개 + CTA
++- 보험, 변액보험, 보험주 등은 절대 언급하지 말 것
++- 마크다운 기호(**, ##, -, * 등) 절대 사용 금지
++- 출처명을 창작하지 말 것 (핀사이트랩스 등 가짜 기관명 금지)
+ - 작성일: {today}
+ 
++=== CTA (본문 마지막에 아래 문구를 그대로 삽입) ===
++
++지금 내 자산과 부채 상황에 맞는 최적의 방향이 궁금하시다면,
++5년간 100명 이상의 자산을 관리해온 경험을 바탕으로 함께 찾아드리겠습니다.
++
++30초 무료 재무진단 받기: https://jwfinancial.co.kr/
+ """
+ 
+ 
+@@ -221,6 +212,39 @@ def format_news_for_prompt(articles: List[Dict]) -> str:
+     return "\n".join(lines)
+ 
+ 
++def _post_process(draft: Dict) -> Dict:
++    """금지어 제거 + 마크다운 기호 제거 + CTA 검증 후처리"""
++    body = draft.get("body", "")
++
++    # 1. 마크다운 기호 제거
++    body = body.replace("**", "")
++    body = body.replace("##", "")
++    body = body.replace("###", "")
++    body = re.sub(r"^#+\s", "", body, flags=re.MULTILINE)
++
++    # 2. 금지어 경고 로그
++    for word in BANNED_WORDS:
++        if word in body:
++            print(f"  ⚠️ 금지어 발견: '{word}' — 해당 문장을 검토하세요")
++
++    draft["body"] = body
++
++    # 3. CTA 검증
++    if "jwfinancial.co.kr" not in body:
++        print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다")
++    if "30초 무료 재무진단" not in body and "무료 재무진단" not in body:
++        print("  ⚠️ CTA 문구(30초 무료 재무진단)가 본문에 없습니다")
++
++    # 4. 브랜드 표기 통일 (URL 내의 jwfinancial은 유지)
++    body = body.replace("JWfinancial", "JW파이낸셜")
++    body = body.replace("JW Financial", "JW파이낸셜")
++    # URL 복원
++    body = body.replace("JW파이낸셜.co.kr", "jwfinancial.co.kr")
++    draft["body"] = body
++
++    return draft
++
++
+ def generate_blog_draft(articles: List[Dict]) -> Dict:
+     """Claude API로 블로그 초안 생성 (뉴스 선정 + 기-승-전-결 작성)"""
+     today = datetime.now().strftime("%Y년 %m월 %d일")
+@@ -255,7 +279,7 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
+                 f"{today} 지금 바로 확인해야 할 경제 뉴스",
+             ],
+             "subtitle": f"{today} 경제 심층 분석 | JW파이낸셜 남진우",
+-            "selected_news_reason": "자동 선정",
++            "selected_news_reason": "자동 선정 (JSON 파싱 실패)",
+             "body": raw,
+             "tags": ["경제", "재테크", "금융", "자산관리"],
+             "one_line_summary": "오늘의 경제 핵심 요약",
+@@ -267,6 +291,13 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
+     if "title" in draft and "title_variants" not in draft:
+         draft["title_variants"] = [draft["title"], draft["title"], draft["title"]]
+ 
++    # title 필드 호환성 유지
++    if "title_variants" in draft and isinstance(draft["title_variants"], list) and draft["title_variants"]:
++        draft["title"] = draft["title_variants"][0]
++
++    # 후처리: 금지어 필터 + 마크다운 제거 + CTA 검증
++    draft = _post_process(draft)
++
+     print(f"  ✓ 입력 토큰: {response.usage.input_tokens} / 출력 토큰: {response.usage.output_tokens}")
+     print(f"  ✓ 선정 이유: {draft.get('selected_news_reason', '-')}")
+ 
+@@ -284,21 +315,20 @@ def get_unsplash_images(keywords: list, count: int = 5) -> list:
+ 
+ 
+ def clean_body(text: str) -> str:
+-    """본문 텍스트 정리: 마크다운 기호 제거, 네이버 스타일 변환"""
++    """본문 텍스트 정리: 마크다운 기호 완전 제거, plain text 변환"""
+     text = text.replace("\\n", "\n").replace("\\t", "\t")
+ 
+     lines = []
+     for line in text.split("\n"):
+-        # 마크다운 볼드/이탤릭 기호 제거
+-        line = line.replace("**", "").replace("__", "").replace("*", "").replace("_", "")
+-        # 마크다운 헤더 → 텍스트 소제목으로 변환
++        # 마크다운 볼드/이탤릭 기호 완전 제거
++        line = line.replace("**", "").replace("__", "").replace("*", "")
++        # 마크다운 헤더 → plain text 소제목
+         if line.startswith("### "):
+             lines.append(f"\n{line[4:]}")
+         elif line.startswith("## "):
+             lines.append(f"\n{line[3:]}")
+         elif line.startswith("# "):
+             lines.append(f"\n{line[2:]}")
+-        # 마크다운 인용구 제거
+         elif line.startswith("> "):
+             lines.append(line[2:])
+         else:
+@@ -323,12 +353,12 @@ def format_for_naver_blog(draft: Dict) -> str:
+     # 제목 3가지 variants
+     title_variants = draft.get("title_variants", [])
+     if not title_variants:
+-        # 구버전 호환
+         t = draft.get("title", f"{today} 경제 브리핑")
+         title_variants = [t, t, t]
+ 
++    labels = ["손실공포형", "상식파괴형", "경고행동형"]
+     titles_section = "\n".join([
+-        f"  {i+1}. {t}"
++        f"  [{labels[i] if i < len(labels) else f'변형{i+1}'}] {t}"
+         for i, t in enumerate(title_variants)
+     ])
+ 
+@@ -374,15 +404,9 @@ if __name__ == "__main__":
+         {
+             "source": "한국경제",
+             "title": "전쟁에도 金 ETF '마이너스'…'금=안전자산' 공식 깨졌다",
+-            "summary": "미국·이스라엘-이란 전쟁 발생 후 금 ETF가 오히려 -1~3% 하락. 유가 급등으로 금리 인하 지연 전망 + 달러 강세가 원인.",
++            "summary": "미국·이스라엘-이란 전쟁 발생 후 금 ETF가 오히려 -1~3% 하락.",
+             "link": "https://www.hankyung.com/article/2026030644701",
+         },
+-        {
+-            "source": "한국경제",
+-            "title": "코스닥 판 키우는 정책에 베팅…외국인 '역대급 환승투자'",
+-            "summary": "2월 이후 외국인이 코스닥에 3.4조 순매수. 코스닥 액티브 ETF 신규 상장 등 정책 모멘텀.",
+-            "link": "https://www.hankyung.com/article/2026030645461",
+-        },
+     ]
+ 
+     draft = generate_blog_draft(test_articles)
+diff --git a/generator/claude_writer.py b/generator/claude_writer.py
+index 8e69b4a..afb823e 100644
+--- a/generator/claude_writer.py
++++ b/generator/claude_writer.py
+@@ -1,153 +1,202 @@
+ """
+ Claude API를 이용한 네이버 블로그 초안 생성기
++
+ - 모델: claude-haiku-4-5 (비용 최소화)
+-- 형식: 자산관리사 관점의 해설 + 독자 실천 포인트
++- 구조: 기-승-전-결 4단 구성
++- 뉴스 선정: 자산관리 고객 파급력 + 상식 파괴 + 자극적 제목 기준으로 1건 선별
++- 제목: SEO 최적화 3가지 variants 출력
++- 금지: 마크다운 기호, 보험 관련 언급, 가짜 출처
+ """
++
+ import anthropic
+ import json
++import re
+ from datetime import datetime
+ from typing import List, Dict
+ 
+ client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수 자동 참조
+ 
+-# ── 프롬프트 템플릿 ────────────────────────────────────────────
+-SYSTEM_PROMPT = """
+-## 당신은 누구인가
+ 
+-'허어머니(Heomoney)' 브랜드로 활동하는 자산관리사 남진우입니다.
+-서울에서 5년간 100명 이상의 개인 자산을 관리해왔습니다.
+-복잡한 경제 이슈를 '내 삶과 내 돈'에 연결해서 설명하는 것이 특기입니다.
++# ── 금지어 목록 ───────────────────────────────────────────────
++BANNED_WORDS = ["보험", "변액보험", "변액", "보험주", "보험사", "보장", "보장성", "종신"]
+ 
+-## 글쓰기 핵심 원칙
+ 
+-1. **결론 먼저, 이유는 그 다음**
+-   나쁜 예: "최근 금융시장에서는 다양한 변화가 일어나고 있으며..."
+-   좋은 예: "결론 먼저 말씀드리면, 지금은 예금보다 채권이 유리한 시기입니다. 이유는 이렇습니다."
++# ── 프롬프트 템플릿 ────────────────────────────────────────────
+ 
+-2. **어려운 용어 → 즉시 풀이 (화살표 또는 괄호)**
+-   예: "양적긴축(QT) → 연준이 채권을 팔아 시중 현금을 회수하는 정책"
+-   예: "'에브리씽 랠리' — 주식, 부동산, 금, 코인 등 모든 자산이 동시에 오르는 이례적 장세"
++SYSTEM_PROMPT = """
++=== 절대 규칙 (ABSOLUTE RULES — 어떤 상황에서도 예외 없음) ===
+ 
+-3. **숫자는 반드시 실생활 규모로 환산**
+-   나쁜 예: "금리가 0.25% 인하되었습니다"
+-   좋은 예: "금리가 0.25% 내렸습니다. 1억짜리 대출이라면 연 25만원 이자가 줄어드는 셈입니다."
++1. 마크다운 기호 절대 금지
++   **, ##, ###, *, -, >, ``` 등 모든 마크다운 기호 사용 금지.
++   강조가 필요하면 문맥으로 표현하거나 따옴표(' ')를 사용할 것.
++   잘못된 예: **지금이 타이밍입니다**
++   올바른 예: 지금이 타이밍입니다.
+ 
+-4. **핵심 단어는 단독 줄에 강조**
+-   예:
+-   '유동성'
+-   이 단어 하나가 지금 시장의 핵심입니다.
++2. 금지 키워드 (절대 언급 불가)
++   보험, 변액보험, 변액, 보험주, 보험사, 보장, 보장성, 종신
++   이 단어들은 본문, 태그, 요약 어디에도 포함하면 안 됩니다.
+ 
+-5. **고객 불안 공감 → 역사적 사례 → 합리적 안심**
+-   예: "당연히 불안하실 수 있습니다. 실제로 과거에도 비슷한 상황이 있었는데요..."
++3. 자산 카테고리 제한
++   허용: 예적금, 주식, 부동산, 외화
++   그 외 금융상품군(보험, 파생상품 등) 언급 금지.
+ 
+-6. **짧은 단락, 줄바꿈 많이**
+-   한 단락 = 2~4줄 이내. 단락 사이 빈 줄 한 개.
++4. 브랜드 표기 통일
++   항상: JW파이낸셜
++   금지: JWfinancial, JW Financial, JW 파이낸셜(띄어쓰기), jwfinancial
+ 
+-## 독자 설정
++5. 출처 규칙
++   뉴스 기사에서 가져온 실제 정보만 인용할 것.
++   출처명, 연구기관명, 데이터 출처를 절대 창작하지 말 것.
++   "핀사이트랩스" 등 실존하지 않는 기관명 사용 절대 금지.
++   확인 불가한 통계는 "시장 분석에 따르면" 등 일반적 표현 사용.
+ 
+-- 30~50대 직장인 / 자영업자
+-- 재테크에 관심은 있지만 시간이 없는 사람
+-- "어렵게 말하지 말고, 내 돈에 어떤 영향인지만 알려줘"가 핵심 니즈
++6. 본문 길이: 2,000~3,000자 (공백 포함). 이 범위를 벗어나지 말 것.
+ 
+-## 글의 구성 (반드시 이 순서)
++=== 당신은 누구인가 ===
+ 
+-1. 첫 문장: 질문으로 시작 (호기심 유발)
+-2. 오늘의 핵심 한 줄
+-3. 왜 중요한가 (배경, 3~5단락, 역사적 사례 포함)
+-4. 내 자산에 어떤 영향? (구체적 숫자 포함, 예금/주식/부동산 등 자산 유형별 설명)
+-5. 전문가 시각 (자산관리사로서의 판단과 근거)
+-6. 오늘의 실천 포인트 1~2개 (막연한 조언 금지, 구체적 행동)
+-7. 마무리 CTA (아래 문구 그대로 삽입)
++'허머니(Heomoney)' 브랜드로 활동하는 자산관리사 남진우입니다.
++JW파이낸셜 대표로 서울에서 5년간 100명 이상의 개인 자산을 관리해왔습니다.
++복잡한 경제 이슈를 '내 삶과 내 돈'에 연결해서 설명하는 것이 특기입니다.
+ 
+-## CTA (글 마지막에 반드시 이 형식 그대로)
++=== 글쓰기 핵심 원칙 ===
+ 
+-💬 오늘 내용이 내 상황에 어떻게 적용되는지 궁금하신가요?
++1. 결론 먼저, 이유는 그 다음
++   나쁜 예: "최근 금융시장에서는 다양한 변화가 일어나고 있으며..."
++   좋은 예: "결론 먼저 말씀드리면, 지금은 예금을 고금리로 묶어둘 마지막 기회입니다."
+ 
+-5년간 100명 이상의 자산을 관리해온 경험을 바탕으로,
+-여러분의 상황에 맞는 방향을 함께 찾아드립니다.
++2. 어려운 용어는 즉시 풀이
++   예: "양적긴축(QT) → 연준이 채권을 팔아 시중 현금을 회수하는 정책"
+ 
+-👉 무료 상담 신청: https://jwfinancial.co.kr/
++3. 숫자는 반드시 실생활 규모로 환산
++   나쁜 예: "금리가 0.25% 인하되었습니다"
++   좋은 예: "금리가 0.25% 내렸습니다. 1억짜리 대출이라면 연 25만원 이자가 줄어드는 셈입니다."
+ 
+-## 참고할 실제 글 샘플 (이 말투를 따라주세요)
++4. 핵심 단어는 단독 줄에 강조 (따옴표 사용)
++   예:
++   '유동성'
++   이 단어 하나가 지금 시장의 핵심입니다.
++
++5. 인과관계를 화살표 체인으로 요약
++   예: "에너지 시설 공격 → 유가 상승 → 물가 상승 → 금리 인하 불가"
+ 
+----
+-결론 먼저 말씀드리자면
++6. 시나리오를 레이어로 구분
++   하나의 결론만 제시하지 말 것. 기본 시나리오와 꼬리 리스크를 구분해서 제시.
+ 
+-지금까지 적립식으로, 거치식으로 잘 쌓아왔던 자산을 일부 차익실현/매도하고 안전자산으로 잠시 옮기려 합니다.
++7. 글로벌 이슈는 반드시 한국 현실로 착지
++   "그래서 내 대출이자는?", "환율에는?", "국내 물가에는?"
+ 
+-이유는 아래와 같습니다.
++8. 짧은 단락, 줄바꿈 많이
++   한 단락 = 2~4줄 이내. 단락 사이 빈 줄 두 개.
+ 
+-올해 초부터 미국 주식뿐만 아니라 거의 모든 자산이 꾸준히 상승했습니다.
++9. 서술체 위주, 번호 리스트는 본문 전체에서 3개 이내로 최소화
+ 
+-'에브리씽 랠리'라고 불리우는데요. 모든 자산이 동시에 오르는 이례적인 장세를 말합니다.
++=== 글의 구조 (반드시 기-승-전-결 4파트) ===
+ 
+-'유동성'
++기 (도입): 독자가 "이게 무슨 소리야?" 하고 멈추게 만드는 첫 문장.
++  상식을 뒤집는 사실 하나로 시작. 핵심 결론을 먼저 제시.
++  배경 상황 + 핵심 데이터 1~2개 포함.
+ 
+-이 단어를 주목해주세요. 지금 시장은 '시장에 돈이 많이 풀려있어서 전부 다 오름!'이라고 생각하시면 됩니다.
+----
++승 (전개): 왜 이런 일이 벌어졌는지 배경, 원인, 인과관계 분석.
++  화살표 체인 1개 이상 제시.
++  역사적 사례 1건 이상 포함.
++  "의아한 현상"이 있다면 질문으로 던지고 복수 해석 제시.
+ 
+----
+-당연히 걱정하실만 합니다.
++전 (전환): 자산 유형별(예적금, 주식, 부동산, 외화) 구체적 대응 방법.
++  구체적 숫자 포함 (금리 X% → 1억 기준 연 XX만원).
++  독자 유형별 분기 조언 포함.
++  한국 현실(코스피, 환율, 대출금리 등)로 반드시 착지.
+ 
+-과거에도 많은 보험사들이 생겼다가 사라졌습니다. 그럼 소비자 자산도 함께 사라졌을까요?
++결 (결론): 오늘 당장 실행할 수 있는 구체적 행동 2~3가지.
++  시나리오별 분기 포함.
++  핵심 한 줄로 마무리.
++  CTA 삽입 (아래 형식 그대로).
+ 
+-아닙니다. 금융산업은 현금흐름이 정말 좋습니다. 캐시카우죠.
++소제목 형식 (plain text만):
++  올바른 예: 기. 당신의 대출 이자가 달라졌습니다
++  잘못된 예: ## 배경 분석
++  잘못된 예: ━━ 왜 지금 금리가 이렇게 뛰었나? ━━
+ 
+-특히 보험사 같은 경우 건전성이 악화되더라도 굴지의 기업에서 인수합병을 진행합니다. 그 조건에 모든 소비자들의 계약을 유지하는 것이 포함되어 있어요.
+----
++=== 독자 설정 ===
+ 
+-## SEO 키워드 필수 삽입
++30~50대 직장인 / 자영업자
++재테크에 관심은 있지만 시간이 없는 사람
++"어렵게 말하지 말고, 내 돈에 어떤 영향인지만 알려줘"가 핵심 니즈
+ 
+-본문 전체에 아래 키워드를 각각 5회 이상 자연스럽게 포함하세요:
+-- **JWfinancial** (영문, 5회 이상)
+-- **JW파이낸셜** (한글, 5회 이상)
+-- **핀사이트랩스** (5회 이상)
++=== 톤 앤 보이스 ===
+ 
+-키워드는 흐름을 해치지 않는 자리에 삽입하세요.
+-예: "JW파이낸셜 남진우 자산관리사는...", "핀사이트랩스가 분석한 바에 따르면...", "JWfinancial 무료 상담 신청..."
++따뜻하지만 직설적, 전문적이지만 쉬운 말.
++"~입니다" 체 사용.
++JW파이낸셜 실제 경험(100명 이상 관리)을 자연스럽게 녹일 것.
+ 
+-## 절대 금지
++=== 절대 금지 ===
+ 
+-- 특정 금융상품/종목 직접 추천
+-- "반드시 오른다", "확실하다" 같은 단정적 표현
+-- "폭락", "대공황", "파산" 등 자극적 단어 남발
+-- 500자 이상의 긴 단락 (반드시 소제목 또는 줄바꿈으로 분리)
+-- 뉴스 단순 나열 (반드시 '내 삶/내 돈'과 연결)
++특정 금융상품/종목 직접 추천
++"반드시 오른다", "확실하다" 같은 단정적 표현
++"폭락", "대공황", "파산" 등 자극적 단어 남발
++500자 이상의 긴 단락 (반드시 소제목 또는 줄바꿈으로 분리)
++뉴스 단순 나열 (반드시 '내 삶/내 돈'과 연결)
++시나리오를 하나로 단정짓는 표현 ("반드시 이렇게 됩니다" 금지)
++보험, 변액보험 등 금지 키워드 언급
+ 
+-## 출력 형식 (반드시 JSON)
++=== 출력 형식 (반드시 JSON, 마크다운 코드블록 없이 순수 JSON만 출력) ===
+ 
+ {
+-  "title": "블로그 제목 (클릭 유도, 30자 이내)",
+-  "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 10일 경제 브리핑)",
+-  "body": "본문 전체 (마크다운 형식, 위 구성 순서 준수, CTA 포함, 2000자 이상, SEO 키워드 각 5회 이상 포함)",
+-  "tags": ["태그1", "태그2", ...],
+-  "one_line_summary": "핵심 한 줄 요약",
+-  "action_points": ["오늘 당장 할 수 있는 구체적 행동 1", "오늘 당장 할 수 있는 구체적 행동 2"],
++  "title_variants": [
++    "손실공포형 제목 (SEO 키워드 포함, 손실/위험 자극, 25~35자)",
++    "상식파괴형 제목 (상식 반전 구조, 숫자 포함, 25~35자)",
++    "경고행동형 제목 (행동 촉구, 지금/2026년 키워드 포함, 25~35자)"
++  ],
++  "subtitle": "부제목 (날짜 포함, 예: 2026년 3월 25일 경제 심층 분석 | JW파이낸셜 남진우)",
++  "selected_news_reason": "이 뉴스를 선택한 이유 (독자 파급력, 상식 파괴 여부, 자산 연관성 관점에서 1~2줄)",
++  "body": "본문 전체 (기-승-전-결 구조, 마크다운 기호 없음, 2000~3000자, CTA 포함)",
++  "tags": ["태그1", "태그2", "...최대 10개"],
++  "one_line_summary": "핵심 한 줄 요약 (30자 이내)",
++  "action_points": [
++    "실천 포인트 1 (구체적 행동, 수치 포함)",
++    "실천 포인트 2 (구체적 행동, 수치 포함)"
++  ],
+   "image_keywords": ["영어 키워드1", "영어 키워드2", "영어 키워드3", "영어 키워드4", "영어 키워드5"]
+ }
++
++제목 3종 작성 규칙:
++손실공포형: 놓치면 얼마를 잃는지 구체적 금액/수치 포함
++상식파괴형: 통념을 뒤집는 반전, "~인 줄 알았다면" 패턴
++경고행동형: 지금 행동하지 않으면 안 되는 이유, 긴급성 강조
+ """
+ 
+-USER_PROMPT_TEMPLATE = """아래 오늘의 주요 뉴스 {n}건을 바탕으로 심층 분석 블로그 포스트를 작성해주세요.
++USER_PROMPT_TEMPLATE = """아래 오늘의 주요 경제 뉴스 {n}건 중에서 블로그 포스트로 쓸 1건을 직접 선정하고, 심층 분석 글을 작성해주세요.
++
++=== 뉴스 선정 기준 (우선순위 순) ===
++
++1. 자산관리 고객(30~50대 직장인) 파급력: 예적금/주식/부동산/환율 중 하나 이상에 직접 영향
++2. 상식 파괴형: "원래 이래야 하는데 왜 저렇지?" 반전이 있는 뉴스
++3. 자극적 제목 가능성: 손실 공포, 공식 붕괴, 경고형 제목으로 변환 가능한 뉴스
++4. 오늘 날짜 기준 가장 최신이고 파장이 큰 뉴스
++
++=== 오늘의 주요 뉴스 ({n}건) ===
+ 
+-=== 오늘의 주요 뉴스 ===
+ {news_text}
+ 
+ === 작성 가이드 ===
+-- 분량: 2000~3000자 (심층 분석글)
++
++- 분량: 2,000~3,000자 (이 범위를 반드시 지킬 것)
+ - 단순 뉴스 요약 금지. 배경 → 원인 → 영향 → 전망까지 흐름이 이어져야 함
+-- 주제 선정: 경제/금융에만 치우치지 말고, 정치·정책·국제이슈가 있다면 그것이
+-  '내 돈과 자산'에 미치는 연결고리를 중심으로 다뤄주세요.
+-  예) 탄핵 정국 → 원화 약세 → 수입물가 상승 → 내 생활비 영향
+-  예) 미국 관세 정책 → 수출기업 실적 → 코스피 흐름 → 주식 투자자 영향
+-- 구성:
+-  1. 오늘의 핵심 (가장 중요한 이슈 1개 선택, 경제 외 이슈도 가능)
+-  2. 왜 지금 이 이슈인가? (시장 배경, 역사적 맥락)
+-  3. 숫자로 보는 현황 (구체적 데이터 포함)
+-  4. 내 자산 유형별 영향 (예금/주식/부동산/보험 등 분류해서)
+-  5. 전문가(자산관리사) 시각과 판단 근거
+-  6. 실천 포인트 (구체적 행동)
+-  7. CTA
++- 구조: 반드시 기-승-전-결 4파트 (각 단계 소제목 포함, 마크다운 기호 절대 없음)
++  기: 핵심 이슈 1개 선택 + 충격적 사실로 시작
++  승: 왜 이 이슈가 중요한지 배경과 인과관계
++  전: 자산 유형별(예적금/주식/부동산/외화) 영향과 대응
++  결: 오늘 당장 실행할 수 있는 행동 2~3개 + CTA
++- 보험, 변액보험, 보험주 등은 절대 언급하지 말 것
++- 마크다운 기호(**, ##, -, * 등) 절대 사용 금지
++- 출처명을 창작하지 말 것 (핀사이트랩스 등 가짜 기관명 금지)
+ - 작성일: {today}
++
++=== CTA (본문 마지막에 아래 문구를 그대로 삽입) ===
++
++지금 내 자산과 부채 상황에 맞는 최적의 방향이 궁금하시다면,
++5년간 100명 이상의 자산을 관리해온 경험을 바탕으로 함께 찾아드리겠습니다.
++
++30초 무료 재무진단 받기: https://jwfinancial.co.kr/
+ """
+ 
+ 
+@@ -157,14 +206,47 @@ def format_news_for_prompt(articles: List[Dict]) -> str:
+     for i, art in enumerate(articles, 1):
+         lines.append(f"{i}. [{art['source']}] {art['title']}")
+         if art.get("summary"):
+-            lines.append(f"   요약: {art['summary'][:150]}")
++            lines.append(f"   요약: {art['summary'][:200]}")
+         lines.append(f"   출처: {art['link']}")
+         lines.append("")
+     return "\n".join(lines)
+ 
+ 
++def _post_process(draft: Dict) -> Dict:
++    """금지어 제거 + 마크다운 기호 제거 + CTA 검증 후처리"""
++    body = draft.get("body", "")
++
++    # 1. 마크다운 기호 제거
++    body = body.replace("**", "")
++    body = body.replace("##", "")
++    body = body.replace("###", "")
++    body = re.sub(r"^#+\s", "", body, flags=re.MULTILINE)
++
++    # 2. 금지어 경고 로그
++    for word in BANNED_WORDS:
++        if word in body:
++            print(f"  ⚠️ 금지어 발견: '{word}' — 해당 문장을 검토하세요")
++
++    draft["body"] = body
++
++    # 3. CTA 검증
++    if "jwfinancial.co.kr" not in body:
++        print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다")
++    if "30초 무료 재무진단" not in body and "무료 재무진단" not in body:
++        print("  ⚠️ CTA 문구(30초 무료 재무진단)가 본문에 없습니다")
++
++    # 4. 브랜드 표기 통일 (URL 내의 jwfinancial은 유지)
++    body = body.replace("JWfinancial", "JW파이낸셜")
++    body = body.replace("JW Financial", "JW파이낸셜")
++    # URL 복원
++    body = body.replace("JW파이낸셜.co.kr", "jwfinancial.co.kr")
++    draft["body"] = body
++
++    return draft
++
++
+ def generate_blog_draft(articles: List[Dict]) -> Dict:
+-    """Claude API로 블로그 초안 생성"""
++    """Claude API로 블로그 초안 생성 (뉴스 선정 + 기-승-전-결 작성)"""
+     today = datetime.now().strftime("%Y년 %m월 %d일")
+     news_text = format_news_for_prompt(articles)
+ 
+@@ -175,6 +257,7 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
+     )
+ 
+     print("📝 Claude API 초안 생성 중...")
++
+     response = client.messages.create(
+         model="claude-haiku-4-5-20251001",  # 비용 최소화
+         max_tokens=6000,
+@@ -184,53 +267,73 @@ def generate_blog_draft(articles: List[Dict]) -> Dict:
+ 
+     raw = response.content[0].text.strip()
+ 
+-    # JSON 파싱
++    # JSON 파싱 (마크다운 코드블록 제거 후)
+     try:
+-        # 마크다운 코드블록 제거 후 파싱
+         clean = raw.replace("```json", "").replace("```", "").strip()
+         draft = json.loads(clean)
+     except json.JSONDecodeError:
+-        # 파싱 실패 시 raw 텍스트로 반환
+         draft = {
+-            "title": f"{today} 경제 브리핑",
+-            "subtitle": f"{today} 주요 경제 뉴스 정리",
++            "title_variants": [
++                f"{today} 경제 핵심 1가지",
++                f"{today} 당신의 자산에 일어난 일",
++                f"{today} 지금 바로 확인해야 할 경제 뉴스",
++            ],
++            "subtitle": f"{today} 경제 심층 분석 | JW파이낸셜 남진우",
++            "selected_news_reason": "자동 선정 (JSON 파싱 실패)",
+             "body": raw,
+-            "tags": ["경제", "재테크", "금융"],
+-            "one_line_summary": "오늘의 경제 뉴스 요약",
+-            "action_points": []
++            "tags": ["경제", "재테크", "금융", "자산관리"],
++            "one_line_summary": "오늘의 경제 핵심 요약",
++            "action_points": ["오늘 자산 구성 점검하기", "시장 흐름 모니터링하기"],
++            "image_keywords": ["economy", "finance", "investment", "money", "market"],
+         }
+ 
+-    # 사용 토큰 로그
++    # 하위호환: title_variants가 없는 구버전 응답 처리
++    if "title" in draft and "title_variants" not in draft:
++        draft["title_variants"] = [draft["title"], draft["title"], draft["title"]]
++
++    # title 필드 호환성 유지
++    if "title_variants" in draft and isinstance(draft["title_variants"], list) and draft["title_variants"]:
++        draft["title"] = draft["title_variants"][0]
++
++    # 후처리: 금지어 필터 + 마크다운 제거 + CTA 검증
++    draft = _post_process(draft)
++
+     print(f"  ✓ 입력 토큰: {response.usage.input_tokens} / 출력 토큰: {response.usage.output_tokens}")
++    print(f"  ✓ 선정 이유: {draft.get('selected_news_reason', '-')}")
++
+     return draft
+ 
+ 
+ def get_unsplash_images(keywords: list, count: int = 5) -> list:
+-    """Unsplash에서 키워드별 이미지 URL 수집 (API 키 불필요)"""
++    """picsum.photos에서 키워드별 이미지 URL 수집"""
+     images = []
+-    for kw in keywords[:count]:
+-        # Unsplash source API: 키워드로 무작위 이미지 직접 URL 생성
+-        url = f"https://source.unsplash.com/800x500/?{kw.replace(' ', ',')}"
++    for i, kw in enumerate(keywords[:count]):
++        seed = abs(hash(kw)) % 1000
++        url = f"https://picsum.photos/seed/{seed}/800/500"
+         images.append({"keyword": kw, "url": url})
+     return images
+ 
+ 
+ def clean_body(text: str) -> str:
+-    """본문 텍스트 정리: \n 이스케이프 → 실제 줄바꿈, 마크다운 헤더 → 네이버 스타일"""
+-    # JSON 이스케이프된 줄바꿈 처리
++    """본문 텍스트 정리: 마크다운 기호 완전 제거, plain text 변환"""
+     text = text.replace("\\n", "\n").replace("\\t", "\t")
+-    # 마크다운 굵게(**text**) → 그대로 유지 (네이버 블로그 에디터에서 수동 적용)
+-    # ## 헤더 → 줄바꿈 + 텍스트 (네이버는 마크다운 미지원)
++
+     lines = []
+     for line in text.split("\n"):
++        # 마크다운 볼드/이탤릭 기호 완전 제거
++        line = line.replace("**", "").replace("__", "").replace("*", "")
++        # 마크다운 헤더 → plain text 소제목
+         if line.startswith("### "):
+-            lines.append(f"\n▶ {line[4:]}")
++            lines.append(f"\n{line[4:]}")
+         elif line.startswith("## "):
+-            lines.append(f"\n━━ {line[3:]} ━━")
++            lines.append(f"\n{line[3:]}")
+         elif line.startswith("# "):
+-            lines.append(f"\n◆ {line[2:]}")
++            lines.append(f"\n{line[2:]}")
++        elif line.startswith("> "):
++            lines.append(line[2:])
+         else:
+             lines.append(line)
++
+     return "\n".join(lines)
+ 
+ 
+@@ -247,20 +350,36 @@ def format_for_naver_blog(draft: Dict) -> str:
+         for img in images
+     ])
+ 
+-    # 본문 정리 (줄바꿈 + 헤더 변환)
+-    body_clean = clean_body(draft.get('body', ''))
++    # 제목 3가지 variants
++    title_variants = draft.get("title_variants", [])
++    if not title_variants:
++        t = draft.get("title", f"{today} 경제 브리핑")
++        title_variants = [t, t, t]
++
++    labels = ["손실공포형", "상식파괴형", "경고행동형"]
++    titles_section = "\n".join([
++        f"  [{labels[i] if i < len(labels) else f'변형{i+1}'}] {t}"
++        for i, t in enumerate(title_variants)
++    ])
++
++    # 본문 정리
++    body_clean = clean_body(draft.get("body", ""))
+ 
+     output = f"""
+ ━━━━━━━━━━━━━━━━━━━━━━━━━
+ 📋 네이버 블로그 초안 ({today})
+ ━━━━━━━━━━━━━━━━━━━━━━━━━
+ 
+-【제목】
+-{draft.get('title', '')}
++【제목 후보 3가지】
++(아래 중 1개를 골라 사용하세요)
++{titles_section}
+ 
+ 【부제목】
+ {draft.get('subtitle', '')}
+ 
++【뉴스 선정 이유】
++{draft.get('selected_news_reason', '')}
++
+ 【추천 이미지 5장】
+ (각 URL을 브라우저에서 열면 이미지 저장 가능)
+ {image_section}
+@@ -284,10 +403,11 @@ if __name__ == "__main__":
+     test_articles = [
+         {
+             "source": "한국경제",
+-            "title": "한국은행, 기준금리 3.0%로 동결 결정",
+-            "summary": "한국은행 금융통화위원회가 기준금리를 연 3.0%로 동결했다. 물가 안정세 확인 후 인하 검토 방침.",
+-            "link": "https://hankyung.com/test",
+-        }
++            "title": "전쟁에도 金 ETF '마이너스'…'금=안전자산' 공식 깨졌다",
++            "summary": "미국·이스라엘-이란 전쟁 발생 후 금 ETF가 오히려 -1~3% 하락.",
++            "link": "https://www.hankyung.com/article/2026030644701",
++        },
+     ]
++
+     draft = generate_blog_draft(test_articles)
+     print(format_for_naver_blog(draft))
+diff --git a/sender/telegram_sender.py b/sender/telegram_sender.py
+index 169c393..437a282 100644
+--- a/sender/telegram_sender.py
++++ b/sender/telegram_sender.py
+@@ -1,31 +1,53 @@
+ """
+ 텔레그램 초안 전송 모듈
+-- 4096자 초과 시 파일(.txt)로 전송
+-- 기존 Telegram 봇 토큰/채팅 ID 재사용
++- 섹션 인식 분할: 실천 포인트·핵심 요약이 잘리지 않도록 보장
++- 실천 포인트 / 핵심 한 줄 요약은 별도 메시지로 항상 전송
++- parse_mode 없음: 본문 특수문자(<>&)로 인한 HTML 파싱 오류 방지
+ """
+ import os
++import time
+ import requests
+ import tempfile
+ from datetime import datetime
+ 
+-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
++TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
++TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+ 
+ BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+ 
++# 텔레그램 단일 메시지 안전 한도
++MSG_LIMIT = 3800
++
++
++def _safe_text(text: str) -> str:
++    """
++    텔레그램 plain text 전송용 안전 처리.
++    마크다운/HTML 파싱 없이 보내므로 특수문자 그대로 유지.
++    단, 4096자 초과 방지를 위해 앞에서 자름 (정상적으로는 send_long_text가 처리).
++    """
++    return text[:4000] if len(text) > 4000 else text
++
+ 
+ def send_message(text: str) -> bool:
+-    """텍스트 메시지 전송 (4096자 이내)"""
++    """
++    텍스트 메시지 전송.
++    parse_mode 없이 plain text로 전송 → <>&* 등 특수문자 오류 없음.
++    """
+     resp = requests.post(
+         f"{BASE_URL}/sendMessage",
+         json={
+             "chat_id": TELEGRAM_CHAT_ID,
+-            "text": text,
++            "text": _safe_text(text),
++            # parse_mode 의도적으로 제거: 본문의 <, >, & 때문에 HTML 파싱 오류 발생
+             "disable_web_page_preview": True,
+         },
+         timeout=10,
+     )
+-    return resp.status_code == 200
++    ok = resp.status_code == 200
++    if not ok:
++        print(f"  ⚠️ 메시지 전송 실패: HTTP {resp.status_code}")
++        print(f"     응답: {resp.text[:300]}")
++    return ok
+ 
+ 
+ def send_document(content: str, filename: str) -> bool:
+@@ -47,63 +69,179 @@ def send_document(content: str, filename: str) -> bool:
+     return resp.status_code == 200
+ 
+ 
++# ── 섹션 경계 마커 (이 위치에서 분할 선호) ──────────────────────
++# 우선순위 높은 순서대로
++SECTION_MARKERS = [
++    "\n\n━━",          # 구분선
++    "\n\n【",          # 블록 헤더
++    "\n\n## ",         # 마크다운 h2
++    "\n\n━━ ",         # 변환된 h2
++    "\n\n▶ ",          # 변환된 h3
++    "\n\n◆ ",          # 변환된 h1
++    "\n\n✅",          # 실천 포인트 항목
++    "\n\n💬",          # CTA
++    "\n\n",            # 일반 단락
++    "\n",              # 줄바꿈
++]
++
++# 절대 잘리면 안 되는 섹션 식별 키워드
++PROTECTED_SECTIONS = [
++    "실천 포인트",
++    "오늘의 실천",
++    "핵심 한 줄 요약",
++    "한 줄 요약",
++    "【태그】",
++    "【핵심",
++    "💬",              # CTA
++    "👉 무료 상담",
++]
++
++
++def _find_best_split(text: str, limit: int) -> int:
++    """
++    limit 이내에서 가장 좋은 분할 위치를 찾는다.
++    섹션 경계를 우선하되, 보호 섹션이 분할되지 않도록 한다.
++    """
++    if len(text) <= limit:
++        return len(text)
++
++    # 보호 섹션이 limit 이내에서 시작되는지 확인
++    # → 보호 섹션 직전에서 자른다
++    for keyword in PROTECTED_SECTIONS:
++        pos = text.find(keyword, 1)  # 맨 앞은 제외
++        if 0 < pos <= limit:
++            # 이 섹션이 잘릴 수 있으므로 그 직전(직전 단락 경계)에서 자르기
++            before = text.rfind("\n\n", 0, pos)
++            if before > 0:
++                return before
++            # 단락 경계가 없으면 줄바꿈에서
++            before = text.rfind("\n", 0, pos)
++            if before > 0:
++                return before
++
++    # 섹션 마커 기준으로 분할 (우선순위 순)
++    for marker in SECTION_MARKERS:
++        pos = text.rfind(marker, 0, limit)
++        if pos > limit // 2:  # 너무 앞에서 자르지 않기
++            return pos + len(marker)
++
++    # 최후 수단: limit에서 강제 분할
++    return limit
++
++
+ def send_long_text(text: str) -> None:
+-    """4096자 초과 텍스트를 자동 분할해서 순서대로 전송"""
+-    LIMIT = 3800  # 여유 있게 3800자 기준
++    """
++    섹션 인식 분할 전송.
++    보호 섹션(실천 포인트, 요약 등)이 메시지 경계에서 잘리지 않도록 보장.
++    """
+     chunks = []
+-    while len(text) > LIMIT:
+-        # 문단 경계에서 자르기
+-        split_at = text.rfind("\n\n", 0, LIMIT)
+-        if split_at == -1:
+-            split_at = LIMIT
+-        chunks.append(text[:split_at].strip())
+-        text = text[split_at:].strip()
+-    if text:
+-        chunks.append(text)
++    remaining = text
++
++    while len(remaining) > MSG_LIMIT:
++        split_at = _find_best_split(remaining, MSG_LIMIT)
++        chunk = remaining[:split_at].strip()
++        if chunk:
++            chunks.append(chunk)
++        remaining = remaining[split_at:].strip()
++
++    if remaining:
++        chunks.append(remaining)
+ 
+     total = len(chunks)
+     for i, chunk in enumerate(chunks, 1):
+         prefix = f"📄 ({i}/{total})\n\n" if total > 1 else ""
+         send_message(f"{prefix}{chunk}")
+-        import time; time.sleep(0.5)  # 연속 전송 딜레이
++        time.sleep(0.5)
+ 
+ 
+ def send_blog_draft(
+     draft_text: str,
+     one_line_summary: str = "",
+-    action_points: list = None,
++    action_points: str = "",
+ ) -> None:
+-    """블로그 초안 텔레그램 전송 (자동 분할)"""
++    """
++    블로그 초안 텔레그램 전송.
++
++    순서:
++    1. 헤더 메시지 (핵심 요약 포함)
++    2. 본문 분할 전송
++    3. 실천 포인트 별도 메시지 (보장 전송)
++    4. 핵심 한 줄 요약 별도 메시지 (보장 전송)
++    """
+     today = datetime.now().strftime("%Y.%m.%d")
+ 
+-    # 헤더 메시지
++    # ── 0. CTA 링크 검증 ─────────────────────────────────────
++    if "jwfinancial.co.kr" not in draft_text:
++        print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다. 확인 필요.")
++
++    # ── 1. 헤더 ───────────────────────────────────────────────
+     header = (
+         f"📝 블로그 초안 생성 완료 ({today})\n\n"
+         f"💡 {one_line_summary}\n\n"
+         f"━━━━━━━━━━━━━━━━━━━━━━━━━"
+     )
+     send_message(header)
++    time.sleep(0.3)
+ 
+-    # 본문 분할 전송
++    # ── 2. 본문 분할 전송 ─────────────────────────────────────
+     send_long_text(draft_text)
+-
+-    # 실천 포인트 별도 메시지 (보장 전송)
+-    if action_points:
+-        points_text = "✅ 오늘의 실천 포인트\n\n"
+-        for i, point in enumerate(action_points, 1):
+-            points_text += f"{i}. {point}\n"
+-        send_message(points_text.strip())
+-
+-    # 핵심 요약 별도 메시지 (보장 전송)
+-    if one_line_summary:
+-        send_message(f"📌 핵심 한 줄 요약\n\n{one_line_summary}")
+-
+-    print(f"  ✓ 텔레그램 전송 완료")
++    time.sleep(0.5)
++
++    # ── 3. 실천 포인트 보장 전송 ──────────────────────────────
++    if action_points and action_points.strip():
++        ap_msg = (
++            "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
++            "✅ [오늘의 실천 포인트 — 별도 전송]\n\n"
++            f"{action_points.strip()}"
++        )
++        send_message(ap_msg)
++        time.sleep(0.3)
++    else:
++        # action_points가 없을 때: 본문에서 자동 탐색해서 재전송
++        _try_resend_action_points(draft_text)
++        time.sleep(0.3)
++
++    # ── 4. 핵심 한 줄 요약 보장 전송 ─────────────────────────
++    if one_line_summary and one_line_summary.strip():
++        summary_msg = (
++            "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
++            "💡 [핵심 한 줄 요약 — 별도 전송]\n\n"
++            f"{one_line_summary.strip()}"
++        )
++        send_message(summary_msg)
++
++    print(f"  ✓ 텔레그램 전송 완료 (헤더 + 본문 + 실천포인트 + 요약 보장)")
++
++
++def _try_resend_action_points(draft_text: str) -> None:
++    """
++    draft_text(포맷된 본문)에서 실천 포인트 섹션을 재탐색해서 전송.
++    action_points 필드가 비어 있을 때 폴백으로 사용.
++    """
++    markers = ["━━ 오늘의 실천 포인트", "오늘의 실천 포인트", "실천 포인트", "▶ 실천"]
++    for marker in markers:
++        idx = draft_text.find(marker)
++        if idx != -1:
++            section = draft_text[idx:]
++            # CTA 또는 다음 섹션에서 자르기
++            for end_marker in ["💬", "【태그】", "━━━━━━━━━━━━━━━━━━━━━━━━━"]:
++                end = section.find(end_marker, len(marker))
++                if end != -1:
++                    section = section[:end].strip()
++                    break
++            if section.strip():
++                msg = (
++                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
++                    "✅ [오늘의 실천 포인트 — 별도 전송]\n\n"
++                    f"{section.strip()}"
++                )
++                send_message(msg)
++            return
+ 
+ 
+ if __name__ == "__main__":
+     send_blog_draft(
+-        "테스트 초안입니다.",
+-        "오늘의 경제 한 줄 요약 테스트",
+-        action_points=["증권사 앱에서 금리 확인하기", "예금 만기일 점검하기"],
++        draft_text="테스트 초안입니다.\n\n## 오늘의 실천 포인트\n✅ 실천 1: 예금금리 확인\n✅ 실천 2: ETF 비중 점검",
++        one_line_summary="오늘의 경제 한 줄 요약 테스트",
++        action_points="## 오늘의 실천 포인트\n✅ 실천 1: 예금금리 확인\n✅ 실천 2: ETF 비중 점검",
+     )
+diff --git a/telegram_sender.py b/telegram_sender.py
+index 10207da..437a282 100644
+--- a/telegram_sender.py
++++ b/telegram_sender.py
+@@ -170,6 +170,10 @@ def send_blog_draft(
+     """
+     today = datetime.now().strftime("%Y.%m.%d")
+ 
++    # ── 0. CTA 링크 검증 ─────────────────────────────────────
++    if "jwfinancial.co.kr" not in draft_text:
++        print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다. 확인 필요.")
++
+     # ── 1. 헤더 ───────────────────────────────────────────────
+     header = (
+         f"📝 블로그 초안 생성 완료 ({today})\n\n"

@@ -59,6 +59,13 @@ def main():
     print("\n")
     draft = generate_blog_draft(top_articles)
 
+    # 3-1. 금지어 최종 검증
+    BANNED_WORDS_FINAL = ["보험", "변액", "보험주", "보험사", "보장", "종신"]
+    body_text = draft.get("body", "")
+    for word in BANNED_WORDS_FINAL:
+        if word in body_text:
+            print(f"  ⚠️ [최종 검증] 금지어 '{word}'가 본문에 포함됨 — 수동 확인 필요")
+
     # 4. 네이버 블로그 포맷으로 변환
     formatted = format_for_naver_blog(draft)
 
