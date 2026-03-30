@@ -157,7 +157,7 @@ def send_long_text(text: str) -> None:
 def send_blog_draft(
     draft_text: str,
     one_line_summary: str = "",
-    action_points: str = "",
+    action_points=None,
 ) -> None:
     """
     블로그 초안 텔레그램 전송.
@@ -167,12 +167,22 @@ def send_blog_draft(
     2. 본문 분할 전송
     3. 실천 포인트 별도 메시지 (보장 전송)
     4. 핵심 한 줄 요약 별도 메시지 (보장 전송)
+
+    action_points: str 또는 list 모두 허용
     """
     today = datetime.now().strftime("%Y.%m.%d")
 
     # ── 0. CTA 링크 검증 ─────────────────────────────────────
     if "jwfinancial.co.kr" not in draft_text:
         print("  ⚠️ CTA 링크(jwfinancial.co.kr)가 본문에 없습니다. 확인 필요.")
+
+    # action_points 타입 통일: list → str 변환
+    if action_points is None:
+        action_points = ""
+    elif isinstance(action_points, list):
+        action_points = "\n".join(
+            f"{i}. {p}" for i, p in enumerate(action_points, 1)
+        )
 
     # ── 1. 헤더 ───────────────────────────────────────────────
     header = (
