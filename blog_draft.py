@@ -1,39 +1,21 @@
 """
 블로그 봇 메인 실행 파일
 실행: python blog_draft.py
+
+파이프라인:
+1. RSS 뉴스 수집
+2. Haiku로 최적 기사 선정 + 팩트 요약
+3. Sonnet 4.6으로 고품질 블로그 초안 작성
+4. 텔레그램 3개 메시지로 전송
 """
 import sys
 import os
-import inspect
 
-# 경로 설정
 sys.path.insert(0, os.path.dirname(__file__))
 
 from sources.rss_collector import collect_all_news, select_top_articles
 from generator.claude_writer import generate_blog_draft, format_for_naver_blog
 from sender.telegram_sender import send_blog_draft
-
-# 신버전 여부: action_points 파라미터 존재 확인
-_SENDER_HAS_ACTION_POINTS = "action_points" in inspect.signature(send_blog_draft).parameters
-
-
-def _append_guaranteed_sections(formatted: str, draft: dict) -> str:
-    """본문 끝에 실천 포인트·핵심 요약 보장 섹션 추가"""
-    action_points = draft.get("action_points", [])
-    one_line_summary = draft.get("one_line_summary", "")
-
-    sections = "\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-
-    if action_points:
-        sections += "\n✅ 오늘의 실천 포인트\n"
-        for i, point in enumerate(action_points, 1):
-            sections += f"  {i}. {point}\n"
-
-    if one_line_summary:
-        sections += f"\n📌 핵심 한 줄 요약\n  {one_line_summary}\n"
-
-    sections += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    return formatted + sections
 
 
 def main():
@@ -49,38 +31,29 @@ def main():
         print("❌ 수집된 뉴스 없음. 종료.")
         return
 
-    # 2. 상위 기사 선별 (5건)
-    top_articles = select_top_articles(articles, n=5)
-    print(f"\n🔍 선별된 기사 {len(top_articles)}건:")
+    # 2. 상위 기사 선별 (Haiku 선정을 위한 후보풀, 최대 10건)
+    top_articles = select_top_articles(articles, n=10)
+    print(f"\n🔍 후보 기사 {len(top_articles)}건:")
     for i, a in enumerate(top_articles, 1):
         print(f"  {i}. [{a['source']}] {a['title']}")
 
-    # 3. Claude API 초안 생성
+    # 3. Haiku 선정 + Sonnet 4.6 초안 생성
     print("\n")
     draft = generate_blog_draft(top_articles)
 
-    # 3-1. 금지어 최종 검증
-    BANNED_WORDS_FINAL = ["보험", "변액", "보험주", "보험사", "보장", "종신"]
-    body_text = draft.get("body", "")
-    for word in BANNED_WORDS_FINAL:
-        if word in body_text:
-            print(f"  ⚠️ [최종 검증] 금지어 '{word}'가 본문에 포함됨 — 수동 확인 필요")
+    # 4. 본문 텍스트 정리 (마크다운 → 텍스트)
+    body_text = format_for_naver_blog(draft)
 
-    # 4. 네이버 블로그 포맷으로 변환
-    formatted = format_for_naver_blog(draft)
-
-    # 실천 포인트·핵심 요약을 본문 끝에 보장 섹션으로 추가
-    formatted = _append_guaranteed_sections(formatted, draft)
-
+    # 5. 텔레그램 3개 메시지 전송
     print("\n📨 텔레그램 전송 중...")
-    kwargs = {
-        "draft_text": formatted,
-        "one_line_summary": draft.get("one_line_summary", ""),
-    }
-    if _SENDER_HAS_ACTION_POINTS:
-        kwargs["action_points"] = draft.get("action_points", [])
-
-    send_blog_draft(**kwargs)
+    send_blog_draft(
+        title=draft.get("title", ""),
+        subtitle=draft.get("subtitle", ""),
+        body=body_text,
+        tags=draft.get("tags", []),
+        one_line_summary=draft.get("one_line_summary", ""),
+        action_points=draft.get("action_points", []),
+    )
 
     print("\n✅ 완료!")
     print("=" * 50)
